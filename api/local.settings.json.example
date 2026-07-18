@@ -1,0 +1,11 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "COSMOS_DB_ENDPOINT": "https://<your-cosmos-account>.documents.azure.com:443/",
+    "COSMOS_DB_KEY": "<cosmos-primary-key>",
+    "COSMOS_DB_DATABASE": "<database-name>",
+    "COSMOS_DB_CONTAINER": "todos"
+  }
+}

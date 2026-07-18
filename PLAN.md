@@ -186,17 +186,18 @@ written in parallel with Phases 2–5. Built with `create-api` (api-dev → api-
 depends on Phase 5 (app to deploy into) and Phase 4 (live Cosmos). Extends `deploy.yaml` with the
 Functions deploy step._
 
-- [ ] `function_app.py` — Python v2 model, HTTP routes for CRUD per the SPEC contract
+- [x] `function_app.py` — Python v2 model, HTTP routes for CRUD per the SPEC contract
       (authored by `api-dev`).
-- [ ] Cosmos SDK integration (create/read/update/delete against `todos`).
-- [ ] `requirements.txt`, `host.json`, `local.settings.json.example`.
-- [ ] Unit tests (`api/tests/`) — authored by `api-qa`; pytest, mocked Cosmos client, driven by
+- [x] Cosmos SDK integration (create/read/update/delete against `todos`).
+- [x] `requirements.txt`, `host.json`, `local.settings.json.example`.
+- [x] Unit tests (`api/tests/`) — authored by `api-qa`; pytest, mocked Cosmos client, driven by
       the fixtures in `api/tests/fixtures/` (`todos.json`, `requests.json`). Cover each CRUD
       route incl. 400/404 cases.
-- [ ] Extend `deploy.yaml`: run pytest, then deploy `api/` to the Function App.
+- [x] Extend `deploy.yaml`: run pytest, then deploy `api/` to the Function App.
 
 **Verify**
-- [ ] `pytest` passes locally against the mocked Cosmos client and fixtures (no infra needed).
+- [x] `pytest` passes locally against the mocked Cosmos client and fixtures (no infra needed):
+      26 passed (`python -m pytest api/tests/ -q`).
 - [ ] Push; `deploy.yaml` tests and deploys the app. Run `test-api`: each CRUD route against the
       live endpoint (create → list → get → update → delete) matches the SPEC contract, including
       the 400/404 error cases.
