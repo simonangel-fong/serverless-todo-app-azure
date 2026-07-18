@@ -40,32 +40,50 @@ def requests_data():
     return _load_fixture("requests.json")
 
 
+# Real Cosmos containers inject these system properties onto every document returned from
+# query_items/read_item/create_item/upsert_item. FakeContainer mirrors that so tests actually
+# exercise TodoRepository's `_project` allow-list stripping instead of vacuously passing against
+# plain dicts that never had metadata to strip in the first place.
+_COSMOS_SYSTEM_PROPERTIES = {
+    "_rid": "fake-rid",
+    "_self": "fake-self-link/",
+    "_etag": '"fake-etag"',
+    "_attachments": "attachments/",
+    "_ts": 1752840000,
+}
+
+
+def _with_cosmos_system_properties(item: dict) -> dict:
+    return {**dict(item), **_COSMOS_SYSTEM_PROPERTIES}
+
+
 class FakeContainer:
     """In-memory stand-in for a Cosmos container client.
 
     Implements just the surface `TodoRepository` calls: query_items, read_item, create_item,
     upsert_item, delete_item. Raises `CosmosResourceNotFoundError` to mirror real Cosmos SDK
-    behavior on missing ids.
+    behavior on missing ids, and stamps Cosmos-style system properties (`_rid`, `_self`, `_etag`,
+    `_attachments`, `_ts`) onto every document it returns, the way a live Cosmos container would.
     """
 
     def __init__(self, seed_items=None):
         self._items = {item["id"]: dict(item) for item in (seed_items or [])}
 
     def query_items(self, query, enable_cross_partition_query=True):
-        return list(dict(v) for v in self._items.values())
+        return [_with_cosmos_system_properties(v) for v in self._items.values()]
 
     def read_item(self, item, partition_key):
         if item not in self._items:
             raise CosmosResourceNotFoundError()
-        return dict(self._items[item])
+        return _with_cosmos_system_properties(self._items[item])
 
     def create_item(self, body):
         self._items[body["id"]] = dict(body)
-        return dict(body)
+        return _with_cosmos_system_properties(body)
 
     def upsert_item(self, body):
         self._items[body["id"]] = dict(body)
-        return dict(body)
+        return _with_cosmos_system_properties(body)
 
     def delete_item(self, item, partition_key):
         if item not in self._items:

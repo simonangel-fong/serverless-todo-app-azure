@@ -15,6 +15,19 @@ from azure.cosmos.exceptions import CosmosResourceNotFoundError
 _client: Optional[CosmosClient] = None
 _container = None
 
+# SPEC.md's data model defines the document shape as exactly these fields. Cosmos injects its
+# own system properties (_rid, _self, _etag, _attachments, _ts) into every item it returns from
+# query_items/read_item/create_item/upsert_item -- this allow-list strips them so responses match
+# the SPEC contract exactly, regardless of caller.
+_DOCUMENT_FIELDS = ("id", "title", "is_completed", "created_at", "updated_at")
+
+
+def _project(item):
+    """Strip Cosmos system properties, keeping only the SPEC-defined document fields."""
+    if item is None:
+        return None
+    return {field: item.get(field) for field in _DOCUMENT_FIELDS}
+
 
 def _build_client() -> CosmosClient:
     endpoint = os.environ["COSMOS_DB_ENDPOINT"]
@@ -58,19 +71,23 @@ class TodoRepository:
 
     def list_all(self):
         query = "SELECT * FROM c"
-        return list(self.container.query_items(query=query, enable_cross_partition_query=True))
+        items = self.container.query_items(query=query, enable_cross_partition_query=True)
+        return [_project(item) for item in items]
 
     def get(self, todo_id: str):
         try:
-            return self.container.read_item(item=todo_id, partition_key=todo_id)
+            item = self.container.read_item(item=todo_id, partition_key=todo_id)
+            return _project(item)
         except CosmosResourceNotFoundError:
             return None
 
     def create(self, item: dict):
-        return self.container.create_item(body=item)
+        created = self.container.create_item(body=item)
+        return _project(created)
 
     def upsert(self, item: dict):
-        return self.container.upsert_item(body=item)
+        updated = self.container.upsert_item(body=item)
+        return _project(updated)
 
     def delete(self, todo_id: str) -> bool:
         try:
