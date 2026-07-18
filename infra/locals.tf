@@ -31,6 +31,12 @@ locals {
   # region and commonly has separate capacity.
   cosmos_location = "eastus2"
 
+  # Function App resources deployed in East US 2 rather than the RG's `location` (East US) --
+  # this subscription is a Free Trial and its App Service Plan quota (Total VMs) is 0 in East
+  # US, which fails Y1 (Consumption) plan creation with a 401 Unauthorized quota error. East US
+  # 2 is where Cosmos already landed (see cosmos_location above) and has quota available.
+  function_location = "eastus2"
+
   # Phase 5 — compute (Function App). Hyphens are fine in these names (Function App /
   # Service Plan naming rules allow them), so they follow the same "<project>-<env>-<suffix>"
   # convention as Cosmos above.

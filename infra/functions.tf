@@ -18,7 +18,7 @@
 resource "azurerm_storage_account" "functions" {
   name                = local.function_storage_account_name
   resource_group_name = data.azurerm_resource_group.main.name
-  location            = local.location
+  location            = local.function_location
 
   account_tier             = "Standard"
   account_replication_type = "LRS"
@@ -32,7 +32,7 @@ resource "azurerm_storage_account" "functions" {
 resource "azurerm_service_plan" "functions" {
   name                = local.function_plan_name
   resource_group_name = data.azurerm_resource_group.main.name
-  location            = local.location
+  location            = local.function_location
 
   os_type  = "Linux" # Linux is required for the Python worker runtime
   sku_name = "Y1"    # Consumption plan -- pay-per-execution, scales to zero when idle
@@ -43,7 +43,7 @@ resource "azurerm_service_plan" "functions" {
 resource "azurerm_linux_function_app" "main" {
   name                = local.function_app_name
   resource_group_name = data.azurerm_resource_group.main.name
-  location            = local.location
+  location            = local.function_location
 
   service_plan_id            = azurerm_service_plan.functions.id
   storage_account_name       = azurerm_storage_account.functions.name
