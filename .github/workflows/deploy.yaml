@@ -99,6 +99,25 @@ jobs:
         working-directory: infra
         run: terraform init -input=false -backend-config=backend.hcl
 
+      # The Function App's CORS allowed_origins references the CDN (Front Door) endpoint's
+      # host_name, which is unknown until that resource exists. A known terraform-plugin-sdk
+      # limitation (hashicorp/terraform-plugin-sdk#1210) means an unknown value inside a
+      # brand-new set(string) attribute can be silently dropped from the plan diff -- so on the
+      # very first apply that creates the endpoint, the CORS change could go undetected in the
+      # same plan. Applying the endpoint first (targeted) makes its host_name known before the
+      # full plan runs, so the CORS diff is always computed correctly in one pipeline run.
+      # `-target` is normally not for routine use; skipped once the endpoint already exists in
+      # state, so this only fires on the one run that actually needs it.
+      - name: Terraform apply (CDN endpoint first, so its hostname is known before the full plan)
+        working-directory: infra
+        run: |
+          if ! terraform state list | grep -qx 'azurerm_cdn_frontdoor_endpoint.web'; then
+            terraform apply -input=false -auto-approve \
+              -var-file=def.tfvars -var="function_app_zip_path=${{ env.ZIP_PATH }}" \
+              -target=azurerm_cdn_frontdoor_profile.web \
+              -target=azurerm_cdn_frontdoor_endpoint.web
+          fi
+
       - name: Terraform plan
         working-directory: infra
         run: terraform plan -input=false -var-file=def.tfvars -var="function_app_zip_path=${{ env.ZIP_PATH }}" -out=tfplan

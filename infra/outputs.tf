@@ -1,5 +1,7 @@
-# Stub for now — later phases add their own outputs as real resources land:
-#   Phase 7 (storage.tf/cdn.tf) -> CDN endpoint hostname (frontend origin)
+output "cdn_endpoint_hostname" {
+  description = "CDN endpoint hostname fronting the Phase 7 static website (frontend origin), consumed by Phase 8's deploy step and by Phase 5's Function App CORS allow-list."
+  value       = "https://${azurerm_cdn_frontdoor_endpoint.web.host_name}"
+}
 
 output "cosmos_account_endpoint" {
   description = "Cosmos DB account document endpoint, consumed by the Phase 5 Function App app settings."

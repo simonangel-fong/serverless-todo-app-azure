@@ -213,10 +213,16 @@ origin (CDN endpoint hostname) that Phase 8 needs, and the `$web` container Phas
 into. No technical dependency on Phase 6 (API) — sequenced after it deliberately, so the API is
 proven working end-to-end before frontend-hosting work begins._
 
-- [ ] Storage account + static website (`$web`).
-- [ ] CDN profile/endpoint fronting the static website.
-- [ ] Output the CDN endpoint hostname (frontend origin).
-- [ ] Update `infra/functions.tf` (Phase 5): add the CDN endpoint origin to the Function App's
+_Cost note: "classic" Azure CDN (pure pay-as-you-go, no base fee) can no longer be created as
+of 2025-10-01, so this layer uses Azure Front Door Standard instead. Front Door Standard bills
+a flat recurring monthly base fee per profile regardless of traffic — the one part of this
+stack that is **not** scale-to-zero. Accepted tradeoff since SPEC.md requires a CDN and classic
+CDN is no longer an option for new resources (see `infra/cdn.tf` for detail)._
+
+- [x] Storage account + static website (`$web`).
+- [x] CDN profile/endpoint fronting the static website.
+- [x] Output the CDN endpoint hostname (frontend origin).
+- [x] Update `infra/functions.tf` (Phase 5): add the CDN endpoint origin to the Function App's
       CORS allow-list.
 
 **Verify**

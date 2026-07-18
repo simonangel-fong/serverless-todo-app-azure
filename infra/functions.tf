@@ -12,8 +12,9 @@
 # repo's pipeline. No infra/rbac.tf is added as a result; app settings carry the Cosmos
 # credentials via resource attribute references, not literal secrets.
 #
-# CORS is deliberately left unset here -- Phase 7 (hosting/CDN) adds the CDN origin to the
-# allow-list in a follow-up change once that origin exists.
+# CORS: the CDN endpoint origin (infra/cdn.tf, Phase 7) is added to site_config.cors below --
+# landed as the deliberate follow-up cross-phase edit PLAN.md calls for once that origin
+# exists. Previously left unset here pending Phase 7.
 #
 # Code deployment: this resource owns the deployed code artifact directly via zip_deploy_file
 # (var.function_app_zip_path, supplied by CI on every apply). No separate CI action (e.g.
@@ -70,6 +71,23 @@ resource "azurerm_linux_function_app" "main" {
   site_config {
     application_stack {
       python_version = "3.11"
+    }
+
+    # Phase 7's CDN endpoint is the frontend's origin -- allowed here so browser fetches
+    # from the hosted static site to this API succeed (see infra/cdn.tf).
+    #
+    # NOTE on convergence: allowed_origins is a `set(string)`, and this value is unknown
+    # during the very first apply that creates infra/cdn.tf's endpoint alongside this
+    # change (Terraform/terraform-plugin-sdk have a long-standing limitation where a
+    # brand-new Set whose only elements are unknown-at-plan-time values can fail to show
+    # as a pending diff -- see hashicorp/terraform-plugin-sdk#1210). If `terraform plan`
+    # right after landing this shows no change to `cors` even though the CDN endpoint is
+    # new, re-run `terraform plan`/apply once more: after the endpoint exists in state its
+    # host_name is a known value, and the diff against the still-empty live `cors` will
+    # then be detected normally. Confirm via `az functionapp cors show` per PLAN.md's
+    # Phase 7 verify step.
+    cors {
+      allowed_origins = ["https://${azurerm_cdn_frontdoor_endpoint.web.host_name}"]
     }
   }
 

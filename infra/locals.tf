@@ -55,4 +55,19 @@ locals {
     lower(replace("${local.project}${local.environment}func", "-", "")),
     0, 24
   )
+
+  # Phase 7 -- hosting (Storage static website + CDN). Storage account names must be
+  # globally unique, 3-24 chars, lowercase alphanumeric only (no hyphens) -- same rationale
+  # as function_storage_account_name above. Named distinctly ("...web") so it can never
+  # collide with the Phase 5 Functions runtime storage account.
+  web_storage_account_name = substr(
+    lower(replace("${local.project}${local.environment}web", "-", "")),
+    0, 24
+  )
+
+  # CDN profile/endpoint names follow the same "<project>-<env>-<suffix>" convention as
+  # Cosmos/Functions above. CDN endpoint names are also part of a globally-shared DNS
+  # namespace (<name>.azureedge.net), so this must be globally unique too.
+  cdn_profile_name  = "${local.project}-${local.environment}-cdn"
+  cdn_endpoint_name = "${local.project}-${local.environment}-web"
 }
