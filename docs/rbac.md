@@ -56,11 +56,19 @@ resource "azuread_service_principal" "serverless_todoapp" {
 
 # Trust GitHub Actions OIDC for pushes to master of this repo.
 # workflow_dispatch runs on master presents the same subject.
+#
+# NOTE: the subject includes GitHub's immutable owner/repo IDs
+# (owner@ownerId/repo@repoId), not plain owner/repo names. GitHub appends
+# these automatically once an account or repository has been renamed at any
+# point in its history, as a hardening measure against subject-reuse if the
+# old name is later reclaimed by someone else — it isn't a togglable setting.
+# Get the exact current subject from a failed AADSTS700213 error (it's printed
+# verbatim in the error message) rather than assuming the plain owner/repo form.
 resource "azuread_application_federated_identity_credential" "serverless_todoapp_ci" {
   application_id = azuread_application.serverless_todoapp.id
   display_name   = "serverless-todo-app-azure-gh-master"
   issuer         = "https://token.actions.githubusercontent.com"
-  subject        = "repo:simonangel-fong/serverless-todo-app-azure:ref:refs/heads/master"
+  subject        = "repo:simonangel-fong@64545430/serverless-todo-app-azure@1304447036:ref:refs/heads/master"
   audiences      = ["api://AzureADTokenExchange"]
 }
 
@@ -161,9 +169,9 @@ The canonical repo exposes these; they are set as **GitHub Actions repository va
 ## Verification (before this repo's Phase 3 goes live)
 
 ```sh
-az ad app list --display-name serverless-todo-app-azure --query "[].appId"
-az role assignment list --assignee 00724cd0-11d9-4218-b161-7423f06097b7 -o table
+az ad app list --display-name serverless-todoapp-dev --query "[].appId"
+az role assignment list --assignee f925c7f6-435d-4289-a64a-2aca79339412 -o table
 # Principal                             Role         Scope
 # ------------------------------------  -----------  ---------------------------------------------------
-# 00724cd0-11d9-4218-b161-7423f06097b7  Contributor  /subscriptions/adb97c42-2927-4b7d-881d-59fc6c69b886
+# f925c7f6-435d-4289-a64a-2aca79339412  Contributor  /subscriptions/adb97c42-2927-4b7d-881d-59fc6c69b886
 ```
