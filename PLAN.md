@@ -56,27 +56,42 @@ _Depends on: nothing._
 _Depends on: Phase 0. These author and operate everything below — they exist before the work,
 not after it. Each is refined as later phases exercise it._
 
-- [x] `agents/terraform-dev` — acts as a Terraform expert; implements the `.tf` code following
-      best practices (Phases 2, 4–6); granted permission to run `terraform` commands.
-- [x] `agents/api-dev` — acts as the Python Functions developer; develops the Python API code
-      (Phase 7).
-- [x] `agents/qa-dev` — acts as a QA specialist; creates test cases and implements tests
-      following best practices (Phase 7 unit tests, verify steps).
-- [x] `skills/cicd` — instructions for the deploy and destroy pipelines (Phase 3 onward).
-- [x] `skills/api-test` — instructions to test the API (used by Phases 7–8 verify steps).
+**Model.** A **subagent** is a *role* (`<tech>-<role>`) — a stateless specialist with its own
+tools and craft, carrying no workflow or layer specifics. A **skill** is an *instruction /
+workflow* (`<verb>-<component>`) — it owns the goal, the steps, which role runs each step, the
+spec, and the trigger; multi-role skills orchestrate subagents that hand off through files on
+disk (a cold subagent can't see another's context).
+
+Subagents (`.claude/agents/`, `<tech>-<role>`):
+- [x] `tf-dev` — Terraform/Azure **author**; writes `.tf` under `infra/`; runs
+      fmt/validate/plan; never applies/destroys.
+- [x] `tf-qa` — Terraform/Azure **reviewer**; read-only inspection of `.tf` against best
+      practices + SPEC/PLAN; reports PASS / CHANGES REQUESTED.
+- [x] `api-dev` — Python Functions (v2) **author**; writes `api/` (excluding tests).
+- [x] `api-qa` — Python **QA**; owns the pytest suite (`api/tests/`) and reviews API code read-only.
+
+Skills (`.claude/skills/`, `<verb>-<component>`):
+- [x] `create-tf-layer` — author a Terraform layer end to end (tf-dev → tf-qa loop); layer + spec
+      from input / SPEC / PLAN (drives Phases 2, 4–6).
+- [x] `create-api` — build the Todo API end to end (api-dev → api-qa loop) (Phase 7).
+- [x] `deploy-stack` — deploy via pipeline; includes the one-time Phase 2 manual bootstrap
+      (Phase 3 onward).
+- [x] `destroy-stack` — tear down via the destroy pipeline (`workflow_dispatch`).
+- [x] `test-api` — unit + live CRUD verification of the API (Phases 7–8 verify steps).
 
 **Verify**
-- [x] Each agent/skill has well-formed frontmatter and its instructions reference SPEC.md and
-      this plan so authored output can't drift. (Agents/skills register on session start —
-      first real exercise is Phase 2, which runs `terraform-dev`.)
+- [x] Each agent/skill has well-formed frontmatter and references SPEC.md / this plan so authored
+      output can't drift; roles carry no phase specifics, skills carry no craft. (They register on
+      session start — first real exercise is Phase 2 via `create-tf-layer`.)
 
 ## Phase 2 — Foundation (`infra/`)
 
-_Depends on: Phase 1 (authored by `terraform-dev`). Produces: working backend/provider
-setup and the resource group — the substrate every later `terraform apply` runs on. This is
-the only phase applied manually; everything after deploys via CI/CD. The RG name must match
-the well-known name the canonical repo's grant is scoped to (see [doc/rbac.md](doc/rbac.md));
-no `rbac.tf` here — the CI principal's permissions are owned by the canonical repo._
+_Depends on: Phase 1. Built with `create-tf-layer` (tf-dev → tf-qa). Produces: working
+backend/provider setup and the resource group — the substrate every later `terraform apply` runs
+on. This is the only phase applied manually (via `deploy-stack`'s one-time bootstrap); everything
+after deploys via CI/CD. The RG name must match the well-known name the canonical repo's grant is
+scoped to (see [doc/rbac.md](doc/rbac.md)); no `rbac.tf` here — the CI principal's permissions are
+owned by the canonical repo._
 
 - [ ] `providers.tf` — `azurerm` provider + required versions; `s3` backend block.
 - [ ] `variables.tf` — inputs (project name, location, tags, etc.).
@@ -165,23 +180,24 @@ deployed via the Phase 3 pipeline._
 ## Phase 7 — API application layer (`api/`)
 
 _Code + unit tests depend only on Phase 1 (fixtures already in `api/tests/fixtures/`) — can be
-written in parallel with Phases 2–6. Pipeline deploy depends on Phase 6 (app to deploy into)
-and Phase 4 (live Cosmos). Extends `deploy.yaml` with the Functions deploy step._
+written in parallel with Phases 2–6. Built with `create-api` (api-dev → api-qa). Pipeline deploy
+depends on Phase 6 (app to deploy into) and Phase 4 (live Cosmos). Extends `deploy.yaml` with the
+Functions deploy step._
 
 - [ ] `function_app.py` — Python v2 model, HTTP routes for CRUD per the SPEC contract
       (authored by `api-dev`).
 - [ ] Cosmos SDK integration (create/read/update/delete against `todos`).
 - [ ] `requirements.txt`, `host.json`, `local.settings.json.example`.
-- [ ] Unit tests (`api/tests/`) — authored by `qa-dev`; pytest, mocked Cosmos client, driven by
+- [ ] Unit tests (`api/tests/`) — authored by `api-qa`; pytest, mocked Cosmos client, driven by
       the fixtures in `api/tests/fixtures/` (`todos.json`, `requests.json`). Cover each CRUD
       route incl. 400/404 cases.
 - [ ] Extend `deploy.yaml`: run pytest, then deploy `api/` to the Function App.
 
 **Verify**
 - [ ] `pytest` passes locally against the mocked Cosmos client and fixtures (no infra needed).
-- [ ] Push; `deploy.yaml` tests and deploys the app. Run `skills/api-test`: each CRUD route
-      against the live endpoint (create → list → get → update → delete) matches the SPEC
-      contract, including the 400/404 error cases.
+- [ ] Push; `deploy.yaml` tests and deploys the app. Run `test-api`: each CRUD route against the
+      live endpoint (create → list → get → update → delete) matches the SPEC contract, including
+      the 400/404 error cases.
 
 ## Phase 8 — Frontend application layer (`web/`)
 
