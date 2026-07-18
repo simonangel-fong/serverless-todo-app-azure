@@ -8,7 +8,7 @@
 resource "azurerm_cosmosdb_account" "main" {
   name                = local.cosmos_account_name
   resource_group_name = data.azurerm_resource_group.main.name
-  location            = local.location
+  location            = local.cosmos_location
   offer_type          = "Standard"
   kind                = "GlobalDocumentDB" # Core (SQL/NoSQL) API
 
@@ -21,7 +21,7 @@ resource "azurerm_cosmosdb_account" "main" {
   }
 
   geo_location {
-    location          = local.location
+    location          = local.cosmos_location
     failover_priority = 0
     zone_redundant    = false # avoid AZ-redundant capacity/cost; not needed for a single dev environment
   }

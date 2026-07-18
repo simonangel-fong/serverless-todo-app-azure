@@ -23,4 +23,11 @@ locals {
   # can't drift from the naming convention used elsewhere in this repo.
   cosmos_account_name  = "${local.project}-${local.environment}-cosmos"
   cosmos_database_name = "${local.project}-${local.environment}-db"
+
+  # Cosmos account deployed in a different region than the RG's `location` (East US) --
+  # a resource's region doesn't have to match its resource group's, which is just a
+  # management container. East US was repeatedly out of capacity for new serverless
+  # Cosmos accounts (ServiceUnavailable on create); East US 2 is its standard paired
+  # region and commonly has separate capacity.
+  cosmos_location = "eastus2"
 }
