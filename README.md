@@ -1,4 +1,4 @@
-# Serverless Todo App on Azure
+# Serverless Todo App on Azure (Claude Code)
 
 A Todo application built entirely serverless on Azure — Cosmos DB (serverless capacity), Azure
 Functions (Python, Consumption plan), and a static frontend on a Storage account — provisioned
@@ -86,26 +86,15 @@ terraform init -backend-config=backend.hcl
 terraform fmt -check && terraform validate && terraform plan -var-file=def.tfvars -var="function_app_zip_path=<any-file>"
 ```
 
-## Notable engineering decisions
+## Reflection: Claude Code
 
-This project was built and iteratively hardened phase by phase, with every real bug encountered
-along the way documented in [PLAN.md](PLAN.md) rather than swept away — including:
-
-- Two Free Trial subscription restrictions that blocked deploys outright (Function App VM quota
-  in East US; Azure Front Door forbidden entirely) and how the design adapted around each.
-- Consolidating the Function App's code deployment from a separate GitHub Action into Terraform
-  itself, closing a real `app_settings` drift bug and a SAS-token-expiry risk in the process.
-  See [Microsoft's documentation](https://learn.microsoft.com/en-us/azure/azure-functions/run-functions-from-deployment-package)
-  and its [AZFD0006 diagnostic](https://learn.microsoft.com/en-us/azure/azure-functions/errors-diagnostics/diagnostic-events/azfd0006).
-- A `terraform-plugin-sdk` limitation ([hashicorp/terraform-plugin-sdk#1210](https://github.com/hashicorp/terraform-plugin-sdk/issues/1210))
-  where an unknown value inside a brand-new Terraform Set can silently vanish from a plan diff —
-  hit twice (once for the CDN endpoint, once for the storage static-website endpoint) and fixed
-  both times with a guarded, idempotent targeted-apply step.
-- A Cosmos SDK response leak (internal `_rid`/`_etag`/etc. fields reaching API responses) that
-  passed 26 mocked unit tests but failed live — fixed, and the test double hardened so it can't
-  regress silently again.
-
-## Non-goals
-
-Authentication/authorization, multi-environment support, and pagination are explicitly out of
-scope for now — see [SPEC.md](SPEC.md) for the full constraint list.
+- Claude Code is powerful, but it needs a well-designed architecture to work well.
+- Benefits:
+  - The SPEC.md + PLAN.md workflow feels natural — progress is logged in documents, making it
+    easy to track.
+  - Skills give clear instructions for repeated patterns — e.g., each infra layer needs coding,
+    `fmt`, `validate`, `plan`, and `apply`; skills help standardize that across iterations.
+- Disadvantages:
+  - This project defined 4 subagents as separate roles, which felt like overengineering, since
+    their responsibilities overlap.
+  - Output is verbose, with unnecessary information.
