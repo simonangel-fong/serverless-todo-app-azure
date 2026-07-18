@@ -127,5 +127,7 @@ jobs:
         working-directory: infra
         run: terraform apply -input=false -auto-approve tfplan
 
-      # Phase 8 adds a $web upload step here (no CDN purge -- the frontend is served
-      # directly from the storage static website, no CDN in front of it; see infra/storage.tf).
+      # Phase 8's frontend (web/) has no separate upload step: infra/frontend.tf's
+      # azurerm_storage_blob resources upload it as part of the Terraform apply above, same
+      # "one tool owns the artifact" pattern as functions.tf's zip_deploy_file. No CDN purge
+      # either -- the frontend is served directly from the storage static website.

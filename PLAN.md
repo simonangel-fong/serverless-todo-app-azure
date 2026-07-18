@@ -238,12 +238,17 @@ project's scale-to-zero constraint._
 ## Phase 8 — Frontend application layer (`web/`)
 
 _Depends on: Phase 7 (`$web` to host it) and Phase 6 (live, verified API to call — the API base
-URL injected at deploy time is the Phase 5 output). Extends `deploy.yaml` with the `$web` upload
-step._
+URL injected at deploy time is the Phase 5 output). No separate `deploy.yaml` upload step is
+needed: `infra/frontend.tf`'s `azurerm_storage_blob` resources upload `web/` as part of the
+existing Terraform apply, the same "Terraform owns the deployment artifact" pattern as Phase 6's
+`zip_deploy_file` — one tool, no new CI step._
 
-- [ ] `index.html` + `app.js` + styles — list/create/toggle/delete against `/api/todos`.
-- [ ] API base URL injected at build/deploy time from the Phase 5 `api url` output.
-- [ ] Extend `deploy.yaml`: upload `web/` to `$web`.
+- [x] `index.html` + `app.js` + `styles.css` — list/create/toggle/edit/delete against `/api/todos`.
+- [x] API base URL injected via Terraform (`infra/frontend.tf` replaces the `__API_BASE_URL__`
+      placeholder in `web/app.js` with the Phase 5 Function App's default hostname output) —
+      not a separate build/deploy-time CI step.
+- [x] `infra/frontend.tf`: `azurerm_storage_blob` resources upload `web/` into `$web`, keyed by
+      `content_md5`/`filemd5()` for change detection (no CI upload step needed).
 
 **Verify**
 - [ ] Push; `deploy.yaml` deploys the frontend.
