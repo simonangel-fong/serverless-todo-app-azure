@@ -138,9 +138,9 @@ per [docs/rbac.md](docs/rbac.md)). From this phase on, every layer is deployed b
 _Depends on: Phase 3 (deployed via pipeline), Phase 2 (RG, naming). Produces: Cosmos endpoint +
 connection consumed by Phase 6 app settings. Independent of Phase 5 — parallelizable._
 
-- [ ] Cosmos DB account (serverless capacity mode, NoSQL API).
-- [ ] Database + `todos` container (partition key `/id`).
-- [ ] Output the account endpoint (connection consumed via resource attributes in Phase 6).
+- [x] Cosmos DB account (serverless capacity mode, NoSQL API).
+- [x] Database + `todos` container (partition key `/id`).
+- [x] Output the account endpoint (connection consumed via resource attributes in Phase 6).
 
 **Verify**
 - [ ] Push; `deploy.yaml` applies it. Confirm via `az cosmosdb show` /

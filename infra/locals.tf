@@ -17,4 +17,10 @@ locals {
     environment = local.environment
     managed_by  = "terraform"
   })
+
+  # Cosmos DB account names must be globally unique across Azure (lowercase alphanumeric
+  # + hyphens, 3-44 chars). Derived from project/environment rather than hardcoded so it
+  # can't drift from the naming convention used elsewhere in this repo.
+  cosmos_account_name  = "${local.project}-${local.environment}-cosmos"
+  cosmos_database_name = "${local.project}-${local.environment}-db"
 }
