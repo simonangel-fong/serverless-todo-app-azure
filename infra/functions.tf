@@ -14,6 +14,20 @@
 #
 # CORS is deliberately left unset here -- Phase 7 (hosting/CDN) adds the CDN origin to the
 # allow-list in a follow-up change once that origin exists.
+#
+# Code deployment: this resource owns the deployed code artifact directly via zip_deploy_file
+# (var.function_app_zip_path, supplied by CI on every apply). No separate CI action (e.g.
+# Azure/functions-action) deploys app code or writes app_settings outside Terraform -- doing so
+# previously left an out-of-band WEBSITE_RUN_FROM_PACKAGE setting on the live app that the next
+# `terraform apply` would silently wipe, since app_settings here is authoritative. Terraform now
+# owns app_settings and the code artifact together to eliminate that drift/wipe risk.
+#
+# WEBSITE_RUN_FROM_PACKAGE = "1" (in app_settings below) is a required companion to
+# zip_deploy_file, not optional -- the azurerm provider's zip_deploy_file schema requires either
+# this setting or SCM_DO_BUILD_DURING_DEPLOYMENT=true to be present. This project vendors Python
+# deps into .python_packages/lib/site-packages before deploy (no remote/Oryx build), so
+# WEBSITE_RUN_FROM_PACKAGE is the correct one; SCM_DO_BUILD_DURING_DEPLOYMENT would trigger an
+# unwanted Oryx build against the zip contents.
 
 resource "azurerm_storage_account" "functions" {
   name                = local.function_storage_account_name
@@ -51,6 +65,8 @@ resource "azurerm_linux_function_app" "main" {
 
   https_only = true # reject plaintext HTTP on the API endpoint
 
+  zip_deploy_file = var.function_app_zip_path
+
   site_config {
     application_stack {
       python_version = "3.11"
@@ -64,6 +80,11 @@ resource "azurerm_linux_function_app" "main" {
     COSMOS_DB_KEY       = azurerm_cosmosdb_account.main.primary_key
     COSMOS_DB_DATABASE  = azurerm_cosmosdb_sql_database.main.name
     COSMOS_DB_CONTAINER = azurerm_cosmosdb_sql_container.todos.name
+
+    # Required companion to zip_deploy_file above -- tells the platform to run directly from the
+    # deployed package instead of expecting an Oryx build. See header comment for why this
+    # setting (not SCM_DO_BUILD_DURING_DEPLOYMENT) is correct for this project.
+    WEBSITE_RUN_FROM_PACKAGE = "1"
   }
 
   tags = local.common_tags

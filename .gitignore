@@ -47,6 +47,9 @@ __pycache__/
 # Vendored deps for Azure Functions RBAC/WEBSITE_RUN_FROM_PACKAGE deploys (built in CI, not committed)
 api/.python_packages/
 
+# Function App deployment package built by CI at the repo root (deploy.yaml); never committed
+/api-package*.zip
+
 # Azure Functions local settings (contains real secrets locally; commit local.settings.json.example instead)
 local.settings.json
 

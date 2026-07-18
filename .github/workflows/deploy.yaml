@@ -24,16 +24,56 @@ env:
   ARM_USE_OIDC: "true"
   TF_IN_AUTOMATION: "true"
 
+# Single atomic job: Terraform now owns the Function App's code deploy directly (zip_deploy_file
+# in infra/functions.tf), not a separate Azure/functions-action step -- that step used to write
+# app_settings (WEBSITE_RUN_FROM_PACKAGE as an external blob SAS URL) outside Terraform's
+# knowledge, which the next `terraform apply` would silently wipe, and which itself carried a
+# SAS-expiry risk (see Microsoft's AZFD0006 diagnostic). One tool, one apply: if pytest fails,
+# nothing in this push deploys -- infra included. That's intentional; see PLAN.md/commit history
+# for the reasoning.
 jobs:
-  terraform:
-    name: Terraform apply
+  deploy:
+    name: Test, build, and deploy (Terraform)
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: infra
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install API dependencies
+        working-directory: api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run unit tests (fail before any apply)
+        working-directory: api
+        run: python -m pytest tests/ -q
+
+      # RBAC/OIDC deploys to a Linux Consumption plan skip Kudu's remote/Oryx build entirely --
+      # dependencies must already be inside the zipped package, in the exact folder the Python
+      # worker scans for extra site-packages.
+      - name: Vendor dependencies into the deployment package
+        working-directory: api
+        run: pip install --target=".python_packages/lib/site-packages" -r requirements.txt
+
+      # Terraform's zip_deploy_file change-detection is by path string, not file content (see
+      # infra/variables.tf) -- the filename embeds a content hash so every code change produces a
+      # genuinely new path and Terraform actually redeploys instead of silently no-op'ing.
+      - name: Build Function App deployment package
+        working-directory: api
+        run: |
+          zip -r "${{ github.workspace }}/api-package.zip" . \
+            -x "tests/*" -x "__pycache__/*" -x "*.pyc" -x ".pytest_cache/*" -x "local.settings.json*"
+          HASH=$(sha256sum "${{ github.workspace }}/api-package.zip" | cut -c1-12)
+          ZIP_PATH="${{ github.workspace }}/api-package-${HASH}.zip"
+          mv "${{ github.workspace }}/api-package.zip" "$ZIP_PATH"
+          echo "ZIP_PATH=$ZIP_PATH" >> "$GITHUB_ENV"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -42,6 +82,7 @@ jobs:
           terraform_wrapper: false
 
       - name: Materialize backend/tfvars (never committed)
+        working-directory: infra
         run: |
           cat > backend.hcl <<EOF
           resource_group_name  = "${{ vars.TF_STATE_RESOURCE_GROUP }}"
@@ -55,57 +96,15 @@ jobs:
           EOF
 
       - name: Terraform init
+        working-directory: infra
         run: terraform init -input=false -backend-config=backend.hcl
 
       - name: Terraform plan
-        run: terraform plan -input=false -var-file=def.tfvars -out=tfplan
+        working-directory: infra
+        run: terraform plan -input=false -var-file=def.tfvars -var="function_app_zip_path=${{ env.ZIP_PATH }}" -out=tfplan
 
       - name: Terraform apply
+        working-directory: infra
         run: terraform apply -input=false -auto-approve tfplan
-
-  api:
-    name: Test and deploy API
-    needs: terraform
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: api
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pytest
-
-      - name: Run unit tests (fail before deploying)
-        run: python -m pytest tests/ -q
-
-      # RBAC/OIDC deploys to a Linux Consumption plan use WEBSITE_RUN_FROM_PACKAGE, which skips
-      # Kudu's remote/Oryx build entirely -- dependencies must already be inside the zipped
-      # package, in the exact folder the Python worker scans for extra site-packages.
-      - name: Vendor dependencies into the deployment package
-        run: pip install --target=".python_packages/lib/site-packages" -r requirements.txt
-
-      - name: Azure login (OIDC)
-        uses: azure/login@v2
-        with:
-          client-id: ${{ vars.AZURE_CLIENT_ID }}
-          tenant-id: ${{ vars.AZURE_TENANT_ID }}
-          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
-
-      - name: Deploy to Azure Function App
-        uses: Azure/functions-action@v1
-        with:
-          app-name: serverless-todoapp-dev-func
-          package: api
-          remote-build: false
 
       # Phase 8 adds a $web upload + CDN purge step here.
