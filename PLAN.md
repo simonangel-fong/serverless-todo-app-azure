@@ -227,13 +227,13 @@ project's scale-to-zero constraint._
       Function App's CORS allow-list.
 
 **Verify**
-- [ ] Push; `deploy.yaml` applies it. Upload a placeholder `index.html` to `$web` and confirm
-      it's served from the storage static-website URL.
-- [ ] Confirm the Function App's CORS allow-list now includes the storage static-website origin.
-      `deploy.yaml` pre-applies the storage account (targeted) before the full plan specifically
-      so this converges in one push (see its comment) — but if CORS is somehow still not set
-      after the first deploy (terraform-plugin-sdk#1210-class limitation), re-run the pipeline
-      via `workflow_dispatch`; the second run will see the now-known endpoint and apply normally.
+- [x] Push; `deploy.yaml` applies it. Uploaded a placeholder `index.html` to `$web` and
+      confirmed it's served from the storage static-website URL (`curl` → `200 OK`, body
+      matches).
+- [x] Confirmed the Function App's CORS allow-list now includes the storage static-website
+      origin (`az functionapp cors show` → `allowedOrigins: ["https://serverlesstodoappdevweb.z13.web.core.windows.net"]`)
+      — converged on the first deploy, confirming `deploy.yaml`'s targeted-apply mitigation
+      (storage account applied before the full plan) worked as intended.
 
 ## Phase 8 — Frontend application layer (`web/`)
 
