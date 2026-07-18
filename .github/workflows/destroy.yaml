@@ -52,5 +52,8 @@ jobs:
       - name: Terraform init
         run: terraform init -input=false -backend-config=backend.hcl
 
+      # function_app_zip_path has no default (deploy.yaml supplies a real zip path every apply)
+      # but destroy still needs some value to satisfy the variable -- its content is irrelevant
+      # here since nothing gets applied/uploaded during a destroy.
       - name: Terraform destroy
-        run: terraform destroy -input=false -auto-approve -var-file=def.tfvars
+        run: terraform destroy -input=false -auto-approve -var-file=def.tfvars -var="function_app_zip_path=unused-for-destroy"
