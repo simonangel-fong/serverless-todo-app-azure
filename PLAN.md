@@ -263,8 +263,24 @@ existing Terraform apply, the same "Terraform owns the deployment artifact" patt
 
 ## Final acceptance
 
-- [ ] `deploy.yaml` runs green end-to-end on push: terraform → pytest → Functions deploy →
-      `$web` upload, with no manual steps and no long-lived secrets (OIDC only).
-- [ ] Confirm serverless tiers scale to zero cost when idle.
-- [ ] Run `destroy.yaml`; confirm full teardown. Re-run `deploy.yaml`; confirm the entire stack
-      is reproducible from scratch.
+- [x] `deploy.yaml` runs green end-to-end on push: terraform → pytest → Functions deploy →
+      `$web` upload, with no manual steps and no long-lived secrets (OIDC only). Confirmed
+      across every phase's push (Phases 4-8); the workflow authenticates via Azure OIDC only
+      (`ARM_USE_OIDC`/`azure/login`), no stored credentials.
+- [x] Confirmed serverless tiers scale to zero cost when idle: Cosmos DB has `EnableServerless`
+      capability with no RU/s offer (`az cosmosdb sql container throughput show` still returns
+      "not supported for serverless accounts"); the Function App plan is `Y1`/`Dynamic`,
+      capacity `0` (Consumption, pay-per-execution); both storage accounts are `Standard_LRS`
+      (pay-per-GB/request, no compute/base fee); no CDN/Front Door resource exists anywhere
+      (the one component that would have broken this — see Phase 7's cost note).
+- [x] Ran `destroy.yaml`; confirmed full teardown (`az resource list -g serverless-todoapp-dev`
+      showed only the externally-owned state-backend storage account left, as expected — see
+      `docs/rbac.md`). Fixed a real gap found in the process: `destroy.yaml` had never been
+      updated to pass `-var="function_app_zip_path=..."` after Phase 5 made it a required
+      variable, so the first destroy attempt failed outright ("No value for required variable")
+      — fixed by supplying a placeholder value (irrelevant during destroy, since nothing gets
+      applied/uploaded). Re-ran `deploy.yaml`; the entire stack rebuilt cleanly from scratch with
+      no manual steps this time (the earlier Phase 8 `terraform import` was only needed because
+      of a stray manually-uploaded blob, not a reproducibility problem in the pipeline itself).
+      Verified live: fresh empty Cosmos container, full CRUD works, frontend serves correctly
+      with the API URL re-injected for the new deployment.
