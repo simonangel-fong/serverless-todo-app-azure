@@ -94,7 +94,7 @@ so there's no create-before-grant ordering dependency between the two repos and 
 bootstrap here. No `rbac.tf` in this repo — the CI principal's permissions are owned by the
 canonical repo._
 
-- [ ] `providers.tf` — `azurerm` provider + required versions; `azurerm` backend block (switched
+- [x] `providers.tf` — `azurerm` provider + required versions; `azurerm` backend block (switched
       from `s3` — state now lives in the canonical repo's Azure Storage account, see `docs/rbac.md`).
 - [x] `variables.tf` — inputs (project name, environment, tags).
 - [x] `locals.tf` — naming convention + common tags; `resource_group_name` is the literal
@@ -102,13 +102,13 @@ canonical repo._
       with that repo's value, not derived here.
 - [x] `outputs.tf` — stub now; each later phase adds its outputs (cosmos endpoint, CDN endpoint,
       api url) as the real resources land.
-- [ ] `backend.hcl.example` + `def.tfvars.example` — committed templates (resource group/storage
+- [x] `backend.hcl.example` + `def.tfvars.example` — committed templates (resource group/storage
       account/container name for the azurerm backend; var values).
 - [x] `rg.tf` — `data "azurerm_resource_group"` reference (not a resource — RG is canonical-repo-owned).
 
 **Verify**
-- [ ] `terraform init -backend-config=backend.hcl` succeeds against the Azure Storage backend.
-- [ ] `terraform validate` and `terraform plan` are clean; plan shows no changes (data source
+- [x] `terraform init -backend-config=backend.hcl` succeeds against the Azure Storage backend.
+- [x] `terraform validate` and `terraform plan` are clean; plan shows no changes (data source
       only, nothing to create).
 - [x] Confirmed the referenced RG exists (`az group show -n serverless-todoapp-dev`) and the CI
       principal (`f925c7f6-435d-4289-a64a-2aca79339412`) has Contributor at the subscription

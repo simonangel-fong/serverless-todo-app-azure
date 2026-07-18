@@ -9,7 +9,7 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  id-token: write # required by zure OIDC
+  id-token: write # required by Azure OIDC
   contents: read
 
 concurrency:
@@ -21,6 +21,7 @@ env:
   ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
   ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
   ARM_USE_OIDC: "true"
+  TF_IN_AUTOMATION: "true"
 
 jobs:
   terraform:
@@ -39,6 +40,14 @@ jobs:
           terraform_version: "~1.9"
           terraform_wrapper: false
 
+      # The azurerm backend (unlike the provider) doesn't auto-discover GitHub's OIDC
+      # token request vars — bridge them into the job env or `terraform init` hangs
+      # indefinitely trying to authenticate instead of failing fast.
+      - name: Bridge GitHub OIDC token for the azurerm backend
+        run: |
+          echo "ARM_OIDC_REQUEST_TOKEN=$ACTIONS_ID_TOKEN_REQUEST_TOKEN" >> "$GITHUB_ENV"
+          echo "ARM_OIDC_REQUEST_URL=$ACTIONS_ID_TOKEN_REQUEST_URL" >> "$GITHUB_ENV"
+
       - name: Materialize backend/tfvars (never committed)
         run: |
           cat > backend.hcl <<EOF
@@ -53,13 +62,13 @@ jobs:
           EOF
 
       - name: Terraform init
-        run: terraform init -backend-config=backend.hcl
+        run: terraform init -input=false -backend-config=backend.hcl
 
       - name: Terraform plan
-        run: terraform plan -var-file=def.tfvars -out=tfplan
+        run: terraform plan -input=false -var-file=def.tfvars -out=tfplan
 
       - name: Terraform apply
-        run: terraform apply -auto-approve tfplan
+        run: terraform apply -input=false -auto-approve tfplan
 
       # Phase 7 adds a pytest + Functions deploy step here.
       # Phase 8 adds a $web upload + CDN purge step here.

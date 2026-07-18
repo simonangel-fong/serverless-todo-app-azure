@@ -4,7 +4,7 @@
 resource_group_name  = "serverless-todoapp-dev"
 storage_account_name = "<canonical-repo-tfstate-storage-account-name>"
 container_name       = "tfstate"
-key                  = "serverless-todo-app-azure/terraform.tfstate"
+key                  = "serverless-todoapp-dev/terraform.tfstate"
 # use_azuread_auth defaults to false; the backend falls back to fetching the storage
 # account key via ARM (Microsoft.Storage/storageAccounts/listkeys/action), which the CI
 # principal's Contributor grant already includes — no separate secret needed.
