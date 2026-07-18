@@ -251,9 +251,15 @@ existing Terraform apply, the same "Terraform owns the deployment artifact" patt
       `content_md5`/`filemd5()` for change detection (no CI upload step needed).
 
 **Verify**
-- [ ] Push; `deploy.yaml` deploys the frontend.
-- [ ] Load the storage static-website endpoint in a browser; confirm full CRUD works end-to-end
-      against the live API (create, toggle, edit, delete all reflected without errors).
+- [x] Push; `deploy.yaml` deploys the frontend. (First push hit a one-time snag: an earlier
+      manual `az storage blob upload` of a placeholder `index.html`, done for Phase 7's verify
+      step, conflicted with Terraform's `azurerm_storage_blob.index_html` — "resource already
+      exists, import it" — resolved with a one-time `terraform import`, then a `workflow_dispatch`
+      re-run deployed cleanly.)
+- [x] Loaded the storage static-website endpoint in a browser; confirmed full CRUD works
+      end-to-end against the live API — create (201), toggle complete (PUT), edit title via
+      prompt (PUT), delete (204, confirmed removed via `GET /api/todos`) all reflected correctly,
+      no errors.
 
 ## Final acceptance
 
