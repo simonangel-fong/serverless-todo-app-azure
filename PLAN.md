@@ -198,9 +198,13 @@ Functions deploy step._
 **Verify**
 - [x] `pytest` passes locally against the mocked Cosmos client and fixtures (no infra needed):
       26 passed (`python -m pytest api/tests/ -q`).
-- [ ] Push; `deploy.yaml` tests and deploys the app. Run `test-api`: each CRUD route against the
-      live endpoint (create → list → get → update → delete) matches the SPEC contract, including
-      the 400/404 error cases.
+- [x] Push; `deploy.yaml` tests and deploys the app. Ran `test-api` against the live endpoint:
+      create (201) → list (200) → get (200) → update (200) → delete (204) → get-after-delete
+      (404), plus the error contract (400 on missing/whitespace title, 404 on PUT/DELETE for an
+      unknown id). Live testing also caught a real bug not visible from mocked unit tests: Cosmos
+      system properties (`_rid`/`_self`/`_etag`/`_attachments`/`_ts`) were leaking into response
+      bodies; fixed in `cosmos_repository.py` (allow-list projection) and hardened the
+      `FakeContainer` test double to simulate that leakage so it can't regress silently.
 
 ## Phase 7 — Hosting layer: Storage static site + CDN (`infra/storage.tf`, `cdn.tf`)
 
