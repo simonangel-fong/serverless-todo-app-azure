@@ -23,6 +23,7 @@ resource "azurerm_cosmosdb_account" "main" {
   geo_location {
     location          = local.location
     failover_priority = 0
+    zone_redundant    = false # avoid AZ-redundant capacity/cost; not needed for a single dev environment
   }
 
   tags = local.common_tags
