@@ -11,7 +11,7 @@ push a phase's changes → workflow deploys → verify live.
 federated credential) and its control-plane grant (Contributor scoped to this project's
 well-known resource group name, or the subscription) live in the canonical identity repo, so
 this repo's pipeline can never modify its own permissions. How to author that in Terraform is
-documented in [docs/rbac.md](docs/rbac.md). This repo's `rbac.tf` (Phases 4–6, only if needed)
+documented in [docs/rbac.md](docs/rbac.md). This repo's `rbac.tf` (Phase 5, only if needed)
 is limited to data-plane, resource-to-resource assignments (e.g., Function App managed
 identity → Cosmos data role).
 
@@ -22,17 +22,20 @@ Dependency graph:
 └─ 1 Claude Code authoring assets      [author every phase below]
    └─ 2 foundation (providers/RG)
       └─ 3 CI/CD (deploy/destroy workflows)   [deploys phases 4+ from here on]
-         ├─ 4 data (Cosmos) ──────────┐
-         ├─ 5 hosting (Storage+CDN) ──┤
-         │                            └─ 6 compute (Function App)  [needs 4: conn, 5: CORS origin]
-         │                                  └─ 7 API code          [unit tests have no infra deps]
-         │                                        └─ 8 frontend    [needs 5: $web/CDN, 7: live API]
+         └─ 4 data (Cosmos)
+            └─ 5 compute (Function App)  [needs 4: conn]
+               └─ 6 API code          [needs 5: app to deploy into, 4: live Cosmos]
+                  └─ 7 hosting (Storage+CDN)  [adds CDN origin to Phase 5's CORS via follow-up apply]
+                     └─ 8 frontend    [needs 7: $web/CDN, 6: live API]
 ```
 
-Phases 4 and 5 are independent of each other and may be done in parallel. Phase 7's code and
-unit tests may be written any time after Phase 1; only their pipeline deploy waits on Phase 6.
+Phase 7's Storage+CDN work has no technical dependency on Phase 6 (API) — it's deliberately
+sequenced after it so the API is proven working end-to-end before frontend-hosting work begins.
+Landing Phase 7 requires one follow-up change to Phase 5's Function App: adding the new CDN
+origin to its CORS allow-list. Phase 6's code and unit tests may be written any time after
+Phase 1; only their pipeline deploy waits on Phase 5.
 
-The CI/CD workflow grows with the stack: Phase 3 ships it as terraform-only; Phase 7 adds the
+The CI/CD workflow grows with the stack: Phase 3 ships it as terraform-only; Phase 6 adds the
 Functions deploy step; Phase 8 adds the `$web` upload + CDN purge step.
 
 ## Phase 0 — Repo hygiene
@@ -72,11 +75,11 @@ Subagents (`.claude/agents/`, `<tech>-<role>`):
 
 Skills (`.claude/skills/`, `<verb>-<component>`):
 - [x] `create-tf-layer` — author a Terraform layer end to end (tf-dev → tf-qa loop); layer + spec
-      from input / SPEC / PLAN (drives Phases 2, 4–6).
-- [x] `create-api` — build the Todo API end to end (api-dev → api-qa loop) (Phase 7).
+      from input / SPEC / PLAN (drives Phases 2, 4, 5, 7).
+- [x] `create-api` — build the Todo API end to end (api-dev → api-qa loop) (Phase 6).
 - [x] `deploy-stack` — deploy via pipeline (Phase 3 onward).
 - [x] `destroy-stack` — tear down via the destroy pipeline (`workflow_dispatch`).
-- [x] `test-api` — unit + live CRUD verification of the API (Phases 7–8 verify steps).
+- [x] `test-api` — unit + live CRUD verification of the API (Phases 6, 8 verify steps).
 
 **Verify**
 - [x] Each agent/skill has well-formed frontmatter and references SPEC.md / this plan so authored
@@ -136,41 +139,29 @@ per [docs/rbac.md](docs/rbac.md)). From this phase on, every layer is deployed b
 ## Phase 4 — Data layer: Cosmos DB (`infra/cosmos.tf`)
 
 _Depends on: Phase 3 (deployed via pipeline), Phase 2 (RG, naming). Produces: Cosmos endpoint +
-connection consumed by Phase 6 app settings. Independent of Phase 5 — parallelizable._
+connection consumed by Phase 5 (compute) app settings._
 
 - [x] Cosmos DB account (serverless capacity mode, NoSQL API).
 - [x] Database + `todos` container (partition key `/id`).
-- [x] Output the account endpoint (connection consumed via resource attributes in Phase 6).
+- [x] Output the account endpoint (connection consumed via resource attributes in Phase 5).
 
 **Verify**
-- [ ] Push; `deploy.yaml` applies it. Confirm via `az cosmosdb show` /
-      `az cosmosdb sql container show` that the account is serverless and the container's
-      partition key is `/id`.
-- [ ] Confirm the account has no provisioned throughput (scale-to-zero when idle).
+- [x] Push; `deploy.yaml` applies it. Confirmed via `az cosmosdb show` (`capabilities:
+      EnableServerless`, `provisioningState: Succeeded`, deployed in East US 2) and
+      `az cosmosdb sql container show` (partition key `/id`) that the account is serverless
+      and the container is correctly configured.
+- [x] Confirmed no provisioned throughput: `az cosmosdb sql container throughput show`
+      returns `BadRequest — Reading or replacing offers is not supported for serverless
+      accounts`, proving no RU/s offer exists (scale-to-zero when idle).
 
-## Phase 5 — Hosting layer: Storage static site + CDN (`infra/storage.tf`, `cdn.tf`)
+## Phase 5 — Compute layer: Function App (`infra/functions.tf`)
 
-_Depends on: Phase 3 (deployed via pipeline), Phase 2 (RG, naming). Produces: the frontend
-origin (CDN endpoint hostname) that Phase 6 needs for CORS, and the `$web` container Phase 8
-deploys into. Independent of Phase 4 — parallelizable. Deliberately before the Function App so
-the CORS origin exists when compute is configured._
-
-- [ ] Storage account + static website (`$web`).
-- [ ] CDN profile/endpoint fronting the static website.
-- [ ] Output the CDN endpoint hostname (frontend origin).
-
-**Verify**
-- [ ] Push; `deploy.yaml` applies it. Upload a placeholder `index.html` to `$web` and confirm
-      it's served from both the storage static-website URL and the CDN endpoint.
-
-## Phase 6 — Compute layer: Function App (`infra/functions.tf`)
-
-_Depends on: Phase 4 (Cosmos connection for app settings) and Phase 5 (CDN origin for CORS);
-deployed via the Phase 3 pipeline._
+_Depends on: Phase 4 (Cosmos connection for app settings); deployed via the Phase 3 pipeline.
+CORS is **not** wired here — Phase 7 (hosting) comes later and adds the CDN origin to this
+Function App's CORS allow-list in a follow-up change once it exists._
 
 - [ ] Function App (Python), Consumption/Flex plan.
 - [ ] App settings: Cosmos connection string/endpoint referenced from the Phase 4 resources.
-- [ ] CORS: allow the Phase 5 CDN endpoint origin.
 - [ ] Output the api url (Function App default hostname).
 - [ ] (only if AAD auth replaces connection strings) `rbac.tf` — data-plane,
       resource-to-resource assignments, e.g. Function App managed identity → Cosmos DB data
@@ -181,13 +172,13 @@ deployed via the Phase 3 pipeline._
       (default host ping / `az functionapp show` state `Running`) even with no functions
       deployed yet.
 - [ ] Confirm the plan is Consumption/Flex (no idle cost); app settings show the Cosmos
-      connection; CORS lists the CDN origin.
+      connection.
 
-## Phase 7 — API application layer (`api/`)
+## Phase 6 — API application layer (`api/`)
 
 _Code + unit tests depend only on Phase 1 (fixtures already in `api/tests/fixtures/`) — can be
-written in parallel with Phases 2–6. Built with `create-api` (api-dev → api-qa). Pipeline deploy
-depends on Phase 6 (app to deploy into) and Phase 4 (live Cosmos). Extends `deploy.yaml` with the
+written in parallel with Phases 2–5. Built with `create-api` (api-dev → api-qa). Pipeline deploy
+depends on Phase 5 (app to deploy into) and Phase 4 (live Cosmos). Extends `deploy.yaml` with the
 Functions deploy step._
 
 - [ ] `function_app.py` — Python v2 model, HTTP routes for CRUD per the SPEC contract
@@ -205,14 +196,32 @@ Functions deploy step._
       live endpoint (create → list → get → update → delete) matches the SPEC contract, including
       the 400/404 error cases.
 
+## Phase 7 — Hosting layer: Storage static site + CDN (`infra/storage.tf`, `cdn.tf`)
+
+_Depends on: Phase 3 (deployed via pipeline), Phase 2 (RG, naming). Produces: the frontend
+origin (CDN endpoint hostname) that Phase 8 needs, and the `$web` container Phase 8 deploys
+into. No technical dependency on Phase 6 (API) — sequenced after it deliberately, so the API is
+proven working end-to-end before frontend-hosting work begins._
+
+- [ ] Storage account + static website (`$web`).
+- [ ] CDN profile/endpoint fronting the static website.
+- [ ] Output the CDN endpoint hostname (frontend origin).
+- [ ] Update `infra/functions.tf` (Phase 5): add the CDN endpoint origin to the Function App's
+      CORS allow-list.
+
+**Verify**
+- [ ] Push; `deploy.yaml` applies it. Upload a placeholder `index.html` to `$web` and confirm
+      it's served from both the storage static-website URL and the CDN endpoint.
+- [ ] Confirm the Function App's CORS allow-list now includes the CDN origin.
+
 ## Phase 8 — Frontend application layer (`web/`)
 
-_Depends on: Phase 5 (`$web` + CDN to host it) and Phase 7 (live, verified API to call — the
-API base URL injected at deploy time is the Phase 6 output). Extends `deploy.yaml` with the
+_Depends on: Phase 7 (`$web` + CDN to host it) and Phase 6 (live, verified API to call — the
+API base URL injected at deploy time is the Phase 5 output). Extends `deploy.yaml` with the
 `$web` upload + CDN purge step._
 
 - [ ] `index.html` + `app.js` + styles — list/create/toggle/delete against `/api/todos`.
-- [ ] API base URL injected at build/deploy time from the Phase 6 `api url` output.
+- [ ] API base URL injected at build/deploy time from the Phase 5 `api url` output.
 - [ ] Extend `deploy.yaml`: upload `web/` to `$web`, purge the CDN.
 
 **Verify**

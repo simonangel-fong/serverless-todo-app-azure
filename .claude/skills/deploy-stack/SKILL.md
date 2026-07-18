@@ -36,7 +36,7 @@ create; the pipeline handles every real apply from Phase 3 on.
 Trigger: push to `master` touching `infra/**`, `api/**`, `web/**` (+ `workflow_dispatch`).
 1. checkout → Azure OIDC → AWS creds → materialize backend/tfvars → `init` → `plan` →
    `apply -auto-approve` (in `infra/`).
-2. (Phase 7) setup Python → `pip install -r api/requirements.txt` → `pytest api/tests/`
+2. (Phase 6) setup Python → `pip install -r api/requirements.txt` → `pytest api/tests/`
    (fail = stop) → deploy `api/` to the Function App.
 3. (Phase 8) upload `web/` to `$web` (inject API base URL from the `api_url` output) → purge CDN.
 

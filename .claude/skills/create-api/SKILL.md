@@ -2,7 +2,7 @@
 name: create-api
 description: >
   Build or change the Python Todo API end to end — api-dev writes the handlers, api-qa writes tests
-  and reviews, loop until green. Use for work under api/ (PLAN.md Phase 7).
+  and reviews, loop until green. Use for work under api/ (PLAN.md Phase 6).
 ---
 
 # create-api — build the Todo API (api-dev → api-qa)

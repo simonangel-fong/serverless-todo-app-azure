@@ -2,7 +2,7 @@
 name: test-api
 description: >
   Test the Todo API — run the pytest unit suite locally, and exercise every CRUD route against the
-  live deployed endpoint per the SPEC contract. Use for PLAN.md Phase 7–8 verify steps.
+  live deployed endpoint per the SPEC contract. Use for PLAN.md Phase 6, 8 verify steps.
 ---
 
 # test-api — verify the Todo API
