@@ -94,6 +94,9 @@ The canonical repo exposes these; they are set as **GitHub Actions repository va
 ## Verification (before this repo's Phase 3 goes live)
 
 ```sh
-az ad app list --display-name gh-serverless-todo-app-azure-ci --query "[].appId"
-az role assignment list --assignee <client-id> -o table   # shows Contributor at the agreed scope
+az ad app list --display-name serverless-todo-app-azure --query "[].appId"
+az role assignment list --assignee 00724cd0-11d9-4218-b161-7423f06097b7 -o table
+# Principal                             Role         Scope
+# ------------------------------------  -----------  ---------------------------------------------------
+# 00724cd0-11d9-4218-b161-7423f06097b7  Contributor  /subscriptions/adb97c42-2927-4b7d-881d-59fc6c69b886
 ```

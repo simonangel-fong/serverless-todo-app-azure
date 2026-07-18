@@ -39,33 +39,36 @@ Functions deploy step; Phase 8 adds the `$web` upload + CDN purge step.
 
 _Depends on: nothing._
 
-- [ ] Add `backend.hcl` to [.gitignore](.gitignore) (`*.tfvars` already ignored).
+- [x] Add `backend.hcl` to [.gitignore](.gitignore) (`*.tfvars` already ignored).
 - [x] `doc/rbac.md` — document how the canonical repo creates the OIDC entity (app
       registration, federated credential, control-plane role assignment) via Terraform.
 
 **Verify**
-- [ ] `git status` shows no local secrets tracked; `backend.hcl`/`def.tfvars` are ignored,
-      `*.example` counterparts are tracked.
+- [x] `git status` shows no local secrets tracked; `backend.hcl`/`def.tfvars` are ignored
+      (`git check-ignore` confirms, at repo root and under `infra/`), and the `*.example`
+      names are not caught by the ignore rules so they'll be trackable when Phase 2 adds them.
 - [ ] The grant described in `doc/rbac.md` exists (`az role assignment list --assignee <client-id>`)
-      before Phase 3 goes live.
+      before Phase 3 goes live. _(Deferred — needs the canonical repo's client id; this is the
+      Phase 3 entry gate.)_
 
 ## Phase 1 — Claude Code authoring assets (`.claude/`)
 
 _Depends on: Phase 0. These author and operate everything below — they exist before the work,
 not after it. Each is refined as later phases exercise it._
 
-- [ ] `agents/terraform-dev` — acts as a Terraform expert; implements the `.tf` code following
+- [x] `agents/terraform-dev` — acts as a Terraform expert; implements the `.tf` code following
       best practices (Phases 2, 4–6); granted permission to run `terraform` commands.
-- [ ] `agents/api-dev` — acts as the Python Functions developer; develops the Python API code
+- [x] `agents/api-dev` — acts as the Python Functions developer; develops the Python API code
       (Phase 7).
-- [ ] `agents/qa-dev` — acts as a QA specialist; creates test cases and implements tests
+- [x] `agents/qa-dev` — acts as a QA specialist; creates test cases and implements tests
       following best practices (Phase 7 unit tests, verify steps).
-- [ ] `skills/cicd` — instructions for the deploy and destroy pipelines (Phase 3 onward).
-- [ ] `skills/api-test` — instructions to test the API (used by Phases 7–8 verify steps).
+- [x] `skills/cicd` — instructions for the deploy and destroy pipelines (Phase 3 onward).
+- [x] `skills/api-test` — instructions to test the API (used by Phases 7–8 verify steps).
 
 **Verify**
-- [ ] Each agent/skill loads and runs in Claude Code (dry-run on a scratch target); its
-      instructions reference SPEC.md and this plan so authored output can't drift.
+- [x] Each agent/skill has well-formed frontmatter and its instructions reference SPEC.md and
+      this plan so authored output can't drift. (Agents/skills register on session start —
+      first real exercise is Phase 2, which runs `terraform-dev`.)
 
 ## Phase 2 — Foundation (`infra/`)
 
