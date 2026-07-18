@@ -1,0 +1,9 @@
+{
+  "valid_create": { "title": "Buy milk" },
+  "valid_update": { "title": "Buy oat milk", "is_completed": true },
+  "partial_update_status_only": { "is_completed": true },
+  "invalid_create_missing_title": {},
+  "invalid_create_empty_title": { "title": "" },
+  "invalid_create_whitespace_title": { "title": "   " },
+  "invalid_create_wrong_type": { "title": 123 }
+}
