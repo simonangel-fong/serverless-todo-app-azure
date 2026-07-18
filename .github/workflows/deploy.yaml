@@ -88,6 +88,12 @@ jobs:
       - name: Run unit tests (fail before deploying)
         run: python -m pytest tests/ -q
 
+      # RBAC/OIDC deploys to a Linux Consumption plan use WEBSITE_RUN_FROM_PACKAGE, which skips
+      # Kudu's remote/Oryx build entirely -- dependencies must already be inside the zipped
+      # package, in the exact folder the Python worker scans for extra site-packages.
+      - name: Vendor dependencies into the deployment package
+        run: pip install --target=".python_packages/lib/site-packages" -r requirements.txt
+
       - name: Azure login (OIDC)
         uses: azure/login@v2
         with:
@@ -100,7 +106,6 @@ jobs:
         with:
           app-name: serverless-todoapp-dev-func
           package: api
-          scm-do-build-during-deployment: true
-          enable-oryx-build: true
+          remote-build: false
 
       # Phase 8 adds a $web upload + CDN purge step here.
