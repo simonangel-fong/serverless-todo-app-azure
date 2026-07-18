@@ -9,9 +9,11 @@
 # Enabling the static website (via the separate azurerm_storage_account_static_website
 # resource below -- the inline `static_website` block on azurerm_storage_account is
 # deprecated in provider v4 and slated for removal in v5) auto-creates the special `$web`
-# container Phase 8 uploads the built frontend into, and turns on the
-# primary_web_endpoint/primary_web_host used by cdn.tf as the CDN origin (never the
-# regular blob endpoint -- see cdn.tf for why).
+# container Phase 8 uploads the built frontend into, and turns on primary_web_endpoint --
+# consumed directly as the frontend URL (outputs.tf's frontend_url) and as the CORS
+# allow-list entry in functions.tf. There is no CDN in front of this endpoint: Azure Front
+# Door is forbidden on this Free Trial/Student subscription, and classic Azure CDN can no
+# longer be created for new resources as of 2025-10-01 (see SPEC.md/PLAN.md Phase 7).
 #
 # error_404_document is set to "index.html" rather than a dedicated 404 page: this is a
 # single-page app with client-side routing (Phase 8), so unknown paths should still load
@@ -28,9 +30,9 @@ resource "azurerm_storage_account" "web" {
 
   min_tls_version = "TLS1_2"
 
-  # Static website content in `$web` must be publicly readable over HTTPS for the CDN/
-  # browsers to fetch it -- unlike functions.tf's runtime storage account, this one is
-  # meant to serve public content.
+  # Static website content in `$web` must be publicly readable over HTTPS for browsers to
+  # fetch it directly (no CDN in front -- see header comment) -- unlike functions.tf's
+  # runtime storage account, this one is meant to serve public content.
   allow_nested_items_to_be_public = true
 
   tags = local.common_tags

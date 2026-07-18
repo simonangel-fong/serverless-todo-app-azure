@@ -1,6 +1,6 @@
-output "cdn_endpoint_hostname" {
-  description = "CDN endpoint hostname fronting the Phase 7 static website (frontend origin), consumed by Phase 8's deploy step and by Phase 5's Function App CORS allow-list."
-  value       = "https://${azurerm_cdn_frontdoor_endpoint.web.host_name}"
+output "frontend_url" {
+  description = "Storage account static-website primary endpoint (frontend origin, served directly -- no CDN), consumed by Phase 8's frontend deploy step and by Phase 5's Function App CORS allow-list."
+  value       = azurerm_storage_account.web.primary_web_endpoint
 }
 
 output "cosmos_account_endpoint" {

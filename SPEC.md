@@ -13,7 +13,7 @@ with Claude Code (see [PLAN.md](PLAN.md) and `.claude/`).
 | API compute   | Azure Functions — serverless (Consumption/Flex plan)                            |
 | API runtime   | Python (Azure Functions Python programming model v2)                            |
 | Database      | Azure Cosmos DB — serverless capacity mode, NoSQL API                           |
-| Frontend      | Static HTML/JS hosted on a Storage account static website, fronted by Azure CDN |
+| Frontend      | Static HTML/JS hosted directly on a Storage account static website (no CDN — Azure Front Door is blocked on this Free Trial subscription, and classic CDN can no longer be created for new resources as of 2025-10-01) |
 | Auth          | Out of scope for now; schema designed so it can be added later                  |
 | IaC           | Terraform (`azurerm` provider)                                                  |
 | State backend | Azure Storage account + blob container (created by the canonical repo)         |
@@ -44,7 +44,7 @@ repartition on `/owner_id` (new container / migration — acceptable pre-launch)
 | PUT    | `/api/todos/{id}` | update (`title`, `is_completed`) | 200 + item  | 400 / 404       |
 | DELETE | `/api/todos/{id}` | delete                           | 204         | 404             |
 
-CORS must allow the Storage/CDN frontend origin.
+CORS must allow the Storage static-website frontend origin.
 
 ## Sample data / test fixtures
 

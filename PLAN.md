@@ -25,18 +25,18 @@ Dependency graph:
          └─ 4 data (Cosmos)
             └─ 5 compute (Function App)  [needs 4: conn]
                └─ 6 API code          [needs 5: app to deploy into, 4: live Cosmos]
-                  └─ 7 hosting (Storage+CDN)  [adds CDN origin to Phase 5's CORS via follow-up apply]
-                     └─ 8 frontend    [needs 7: $web/CDN, 6: live API]
+                  └─ 7 hosting (Storage static site)  [adds storage origin to Phase 5's CORS via follow-up apply]
+                     └─ 8 frontend    [needs 7: $web, 6: live API]
 ```
 
-Phase 7's Storage+CDN work has no technical dependency on Phase 6 (API) — it's deliberately
-sequenced after it so the API is proven working end-to-end before frontend-hosting work begins.
-Landing Phase 7 requires one follow-up change to Phase 5's Function App: adding the new CDN
-origin to its CORS allow-list. Phase 6's code and unit tests may be written any time after
-Phase 1; only their pipeline deploy waits on Phase 5.
+Phase 7's Storage static-site work has no technical dependency on Phase 6 (API) — it's
+deliberately sequenced after it so the API is proven working end-to-end before frontend-hosting
+work begins. Landing Phase 7 requires one follow-up change to Phase 5's Function App: adding the
+new storage static-website origin to its CORS allow-list. Phase 6's code and unit tests may be
+written any time after Phase 1; only their pipeline deploy waits on Phase 5.
 
 The CI/CD workflow grows with the stack: Phase 3 ships it as terraform-only; Phase 6 adds the
-Functions deploy step; Phase 8 adds the `$web` upload + CDN purge step.
+Functions deploy step; Phase 8 adds the `$web` upload step.
 
 ## Phase 0 — Repo hygiene
 
@@ -103,7 +103,7 @@ canonical repo._
 - [x] `locals.tf` — naming convention + common tags; `resource_group_name` is the literal
       well-known name (`serverless-todoapp-dev`) created by the canonical repo — kept in sync
       with that repo's value, not derived here.
-- [x] `outputs.tf` — stub now; each later phase adds its outputs (cosmos endpoint, CDN endpoint,
+- [x] `outputs.tf` — stub now; each later phase adds its outputs (cosmos endpoint, frontend URL,
       api url) as the real resources land.
 - [x] `backend.hcl.example` + `def.tfvars.example` — committed templates (resource group/storage
       account/container name for the azurerm backend; var values).
@@ -157,8 +157,8 @@ connection consumed by Phase 5 (compute) app settings._
 ## Phase 5 — Compute layer: Function App (`infra/functions.tf`)
 
 _Depends on: Phase 4 (Cosmos connection for app settings); deployed via the Phase 3 pipeline.
-CORS is **not** wired here — Phase 7 (hosting) comes later and adds the CDN origin to this
-Function App's CORS allow-list in a follow-up change once it exists._
+CORS is **not** wired here — Phase 7 (hosting) comes later and adds the storage static-website
+origin to this Function App's CORS allow-list in a follow-up change once it exists._
 
 - [x] Function App (Python), Consumption/Flex plan.
 - [x] App settings: Cosmos connection string/endpoint referenced from the Phase 4 resources.
@@ -206,49 +206,54 @@ Functions deploy step._
       bodies; fixed in `cosmos_repository.py` (allow-list projection) and hardened the
       `FakeContainer` test double to simulate that leakage so it can't regress silently.
 
-## Phase 7 — Hosting layer: Storage static site + CDN (`infra/storage.tf`, `cdn.tf`)
+## Phase 7 — Hosting layer: Storage static site (`infra/storage.tf`)
 
 _Depends on: Phase 3 (deployed via pipeline), Phase 2 (RG, naming). Produces: the frontend
-origin (CDN endpoint hostname) that Phase 8 needs, and the `$web` container Phase 8 deploys
-into. No technical dependency on Phase 6 (API) — sequenced after it deliberately, so the API is
-proven working end-to-end before frontend-hosting work begins._
+origin (storage static-website endpoint) that Phase 8 needs, and the `$web` container Phase 8
+deploys into. No technical dependency on Phase 6 (API) — sequenced after it deliberately, so the
+API is proven working end-to-end before frontend-hosting work begins._
 
-_Cost note: "classic" Azure CDN (pure pay-as-you-go, no base fee) can no longer be created as
-of 2025-10-01, so this layer uses Azure Front Door Standard instead. Front Door Standard bills
-a flat recurring monthly base fee per profile regardless of traffic — the one part of this
-stack that is **not** scale-to-zero. Accepted tradeoff since SPEC.md requires a CDN and classic
-CDN is no longer an option for new resources (see `infra/cdn.tf` for detail)._
+_No CDN in front of this endpoint: Azure Front Door is forbidden on this Free Trial/Student
+subscription ("BadRequest: Free Trial and Student account is forbidden for Azure Frontdoor
+resources", confirmed by a live pipeline failure), and "classic" Azure CDN
+(`azurerm_cdn_profile`/`azurerm_cdn_endpoint`) can no longer be created for new resources as of
+2025-10-01. With neither option available, the frontend is served directly from the storage
+account's static-website endpoint instead — no flat recurring base fee, consistent with this
+project's scale-to-zero constraint._
 
 - [x] Storage account + static website (`$web`).
-- [x] CDN profile/endpoint fronting the static website.
-- [x] Output the CDN endpoint hostname (frontend origin).
-- [x] Update `infra/functions.tf` (Phase 5): add the CDN endpoint origin to the Function App's
-      CORS allow-list.
+- [x] Output the storage static-website endpoint (frontend origin).
+- [x] Update `infra/functions.tf` (Phase 5): add the storage static-website origin to the
+      Function App's CORS allow-list.
 
 **Verify**
 - [ ] Push; `deploy.yaml` applies it. Upload a placeholder `index.html` to `$web` and confirm
-      it's served from both the storage static-website URL and the CDN endpoint.
-- [ ] Confirm the Function App's CORS allow-list now includes the CDN origin.
+      it's served from the storage static-website URL.
+- [ ] Confirm the Function App's CORS allow-list now includes the storage static-website origin.
+      `deploy.yaml` pre-applies the storage account (targeted) before the full plan specifically
+      so this converges in one push (see its comment) — but if CORS is somehow still not set
+      after the first deploy (terraform-plugin-sdk#1210-class limitation), re-run the pipeline
+      via `workflow_dispatch`; the second run will see the now-known endpoint and apply normally.
 
 ## Phase 8 — Frontend application layer (`web/`)
 
-_Depends on: Phase 7 (`$web` + CDN to host it) and Phase 6 (live, verified API to call — the
-API base URL injected at deploy time is the Phase 5 output). Extends `deploy.yaml` with the
-`$web` upload + CDN purge step._
+_Depends on: Phase 7 (`$web` to host it) and Phase 6 (live, verified API to call — the API base
+URL injected at deploy time is the Phase 5 output). Extends `deploy.yaml` with the `$web` upload
+step._
 
 - [ ] `index.html` + `app.js` + styles — list/create/toggle/delete against `/api/todos`.
 - [ ] API base URL injected at build/deploy time from the Phase 5 `api url` output.
-- [ ] Extend `deploy.yaml`: upload `web/` to `$web`, purge the CDN.
+- [ ] Extend `deploy.yaml`: upload `web/` to `$web`.
 
 **Verify**
 - [ ] Push; `deploy.yaml` deploys the frontend.
-- [ ] Load the CDN endpoint in a browser; confirm full CRUD works end-to-end against the live
-      API (create, toggle, edit, delete all reflected without errors).
+- [ ] Load the storage static-website endpoint in a browser; confirm full CRUD works end-to-end
+      against the live API (create, toggle, edit, delete all reflected without errors).
 
 ## Final acceptance
 
 - [ ] `deploy.yaml` runs green end-to-end on push: terraform → pytest → Functions deploy →
-      `$web` upload → CDN purge, with no manual steps and no long-lived secrets (OIDC only).
+      `$web` upload, with no manual steps and no long-lived secrets (OIDC only).
 - [ ] Confirm serverless tiers scale to zero cost when idle.
 - [ ] Run `destroy.yaml`; confirm full teardown. Re-run `deploy.yaml`; confirm the entire stack
       is reproducible from scratch.
