@@ -121,16 +121,16 @@ and the canonical-repo prerequisite (RG + OIDC principal + subscription-scoped C
 per [docs/rbac.md](docs/rbac.md)). From this phase on, every layer is deployed by pushing to
 `master` — no manual applies at all, including Phase 2._
 
-- [ ] `deploy.yaml` — trigger on push to `master` touching `infra/`/app paths; single Azure OIDC
+- [x] `deploy.yaml` — trigger on push to `master` touching `infra/`/app paths; single Azure OIDC
       login (provider + `azurerm` backend); materialize `backend.hcl`/`def.tfvars` from repo
       variables; `init` → `plan` → `apply`. (Functions deploy and `$web` upload steps are added
       in Phases 7–8.)
-- [ ] `destroy.yaml` — `workflow_dispatch`; same auth/config; `terraform destroy`.
+- [x] `destroy.yaml` — `workflow_dispatch`; same auth/config; `terraform destroy`.
 
 **Verify**
-- [ ] Push to `master`; `deploy.yaml` runs green via OIDC only (no long-lived secrets), applies
+- [x] Push to `master`; `deploy.yaml` runs green via OIDC only (no long-lived secrets), applies
       cleanly against the Phase 2 state (no-op plan proves state/backend wiring).
-- [ ] Run `destroy.yaml` and re-run `deploy.yaml`; confirm teardown and clean re-creation of
+- [x] Run `destroy.yaml` and re-run `deploy.yaml`; confirm teardown and clean re-creation of
       the Phase 2 resources — the pipeline is now the deployment path for all later phases.
 
 ## Phase 4 — Data layer: Cosmos DB (`infra/cosmos.tf`)
