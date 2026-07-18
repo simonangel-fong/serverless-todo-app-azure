@@ -160,12 +160,14 @@ _Depends on: Phase 4 (Cosmos connection for app settings); deployed via the Phas
 CORS is **not** wired here — Phase 7 (hosting) comes later and adds the CDN origin to this
 Function App's CORS allow-list in a follow-up change once it exists._
 
-- [ ] Function App (Python), Consumption/Flex plan.
-- [ ] App settings: Cosmos connection string/endpoint referenced from the Phase 4 resources.
-- [ ] Output the api url (Function App default hostname).
-- [ ] (only if AAD auth replaces connection strings) `rbac.tf` — data-plane,
+- [x] Function App (Python), Consumption/Flex plan.
+- [x] App settings: Cosmos connection string/endpoint referenced from the Phase 4 resources.
+- [x] Output the api url (Function App default hostname).
+- [x] (only if AAD auth replaces connection strings) `rbac.tf` — data-plane,
       resource-to-resource assignments, e.g. Function App managed identity → Cosmos DB data
       role. Never assignments for the CI principal itself (canonical repo owns those).
+      _(Not applicable — key-based connection used instead; see functions.tf comments and
+      docs/rbac.md, since the CI principal can't grant role assignments anyway.)_
 
 **Verify**
 - [ ] Push; `deploy.yaml` applies it. Confirm the Function App exists and is reachable

@@ -30,4 +30,20 @@ locals {
   # Cosmos accounts (ServiceUnavailable on create); East US 2 is its standard paired
   # region and commonly has separate capacity.
   cosmos_location = "eastus2"
+
+  # Phase 5 — compute (Function App). Hyphens are fine in these names (Function App /
+  # Service Plan naming rules allow them), so they follow the same "<project>-<env>-<suffix>"
+  # convention as Cosmos above.
+  function_app_name  = "${local.project}-${local.environment}-func"
+  function_plan_name = "${local.project}-${local.environment}-func-plan"
+
+  # Functions requires its own Storage Account (queues/blobs for the runtime, host key
+  # storage, deployment package). Storage account names must be globally unique, 3-24
+  # chars, lowercase alphanumeric only (no hyphens) -- derived from project/environment
+  # rather than hardcoded, same rationale as cosmos_account_name above. Named distinctly
+  # ("...func") so it can never collide with the Phase 7 static-website storage account.
+  function_storage_account_name = substr(
+    lower(replace("${local.project}${local.environment}func", "-", "")),
+    0, 24
+  )
 }

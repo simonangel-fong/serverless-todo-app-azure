@@ -1,10 +1,14 @@
 # Stub for now — later phases add their own outputs as real resources land:
-#   Phase 5 (storage/cdn)  -> CDN endpoint hostname (frontend origin)
-#   Phase 6 (functions.tf) -> Function App default hostname (api url)
+#   Phase 7 (storage.tf/cdn.tf) -> CDN endpoint hostname (frontend origin)
 
 output "cosmos_account_endpoint" {
-  description = "Cosmos DB account document endpoint, consumed by the Phase 6 Function App app settings."
+  description = "Cosmos DB account document endpoint, consumed by the Phase 5 Function App app settings."
   value       = azurerm_cosmosdb_account.main.endpoint
+}
+
+output "function_app_default_hostname" {
+  description = "Function App default hostname (api url), consumed by Phase 8's frontend as the API base URL."
+  value       = "https://${azurerm_linux_function_app.main.default_hostname}"
 }
 
 output "resource_group_name" {
