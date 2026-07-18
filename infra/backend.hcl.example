@@ -1,5 +1,10 @@
-# Copy to backend.hcl (gitignored) and fill in real values, then:
+# Copy to backend.hcl (gitignored) and fill in real values (from the canonical repo's
+# serverless_todoapp_tfstate_* outputs, see docs/rbac.md), then:
 #   terraform init -backend-config=backend.hcl
-bucket = "<existing-s3-bucket-name>"
-key    = "serverless-todo-app-azure/terraform.tfstate"
-region = "<aws-region>"
+resource_group_name  = "serverless-todoapp-dev"
+storage_account_name = "<canonical-repo-tfstate-storage-account-name>"
+container_name       = "tfstate"
+key                  = "serverless-todo-app-azure/terraform.tfstate"
+# use_azuread_auth defaults to false; the backend falls back to fetching the storage
+# account key via ARM (Microsoft.Storage/storageAccounts/listkeys/action), which the CI
+# principal's Contributor grant already includes — no separate secret needed.

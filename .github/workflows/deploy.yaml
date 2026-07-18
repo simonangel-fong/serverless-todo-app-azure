@@ -1,0 +1,65 @@
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "infra/**"
+      - ".github/workflows/deploy.yaml"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write # required by zure OIDC
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  ARM_CLIENT_ID: ${{ vars.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ vars.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: "true"
+
+jobs:
+  terraform:
+    name: Terraform apply
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: infra
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "~1.9"
+          terraform_wrapper: false
+
+      - name: Materialize backend/tfvars (never committed)
+        run: |
+          cat > backend.hcl <<EOF
+          resource_group_name  = "${{ vars.TF_STATE_RESOURCE_GROUP }}"
+          storage_account_name = "${{ vars.TF_STATE_STORAGE_ACCOUNT }}"
+          container_name       = "${{ vars.TF_STATE_CONTAINER }}"
+          key                  = "serverless-todoapp-dev/terraform.tfstate"
+          EOF
+          cat > def.tfvars <<EOF
+          project_name = "${{ vars.TF_PROJECT_NAME }}"
+          environment  = "${{ vars.TF_ENVIRONMENT }}"
+          EOF
+
+      - name: Terraform init
+        run: terraform init -backend-config=backend.hcl
+
+      - name: Terraform plan
+        run: terraform plan -var-file=def.tfvars -out=tfplan
+
+      - name: Terraform apply
+        run: terraform apply -auto-approve tfplan
+
+      # Phase 7 adds a pytest + Functions deploy step here.
+      # Phase 8 adds a $web upload + CDN purge step here.

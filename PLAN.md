@@ -94,23 +94,25 @@ so there's no create-before-grant ordering dependency between the two repos and 
 bootstrap here. No `rbac.tf` in this repo — the CI principal's permissions are owned by the
 canonical repo._
 
-- [x] `providers.tf` — `azurerm` provider + required versions; `s3` backend block.
+- [ ] `providers.tf` — `azurerm` provider + required versions; `azurerm` backend block (switched
+      from `s3` — state now lives in the canonical repo's Azure Storage account, see `docs/rbac.md`).
 - [x] `variables.tf` — inputs (project name, environment, tags).
 - [x] `locals.tf` — naming convention + common tags; `resource_group_name` is the literal
       well-known name (`serverless-todoapp-dev`) created by the canonical repo — kept in sync
       with that repo's value, not derived here.
 - [x] `outputs.tf` — stub now; each later phase adds its outputs (cosmos endpoint, CDN endpoint,
       api url) as the real resources land.
-- [x] `backend.hcl.example` + `def.tfvars.example` — committed templates (bucket/key/region; var values).
+- [ ] `backend.hcl.example` + `def.tfvars.example` — committed templates (resource group/storage
+      account/container name for the azurerm backend; var values).
 - [x] `rg.tf` — `data "azurerm_resource_group"` reference (not a resource — RG is canonical-repo-owned).
 
 **Verify**
-- [ ] `terraform init -backend-config=backend.hcl` succeeds against the S3 backend.
+- [ ] `terraform init -backend-config=backend.hcl` succeeds against the Azure Storage backend.
 - [ ] `terraform validate` and `terraform plan` are clean; plan shows no changes (data source
       only, nothing to create).
-- [ ] Confirm the referenced RG exists (`az group show -n serverless-todoapp-dev`) and the CI
-      principal has Contributor at the subscription scope
-      (`az role assignment list --assignee <client-id> -o table`, per `docs/rbac.md`).
+- [x] Confirmed the referenced RG exists (`az group show -n serverless-todoapp-dev`) and the CI
+      principal (`f925c7f6-435d-4289-a64a-2aca79339412`) has Contributor at the subscription
+      scope (`az role assignment list --assignee <client-id> -o table`, per `docs/rbac.md`).
 
 ## Phase 3 — CI/CD (`.github/workflows/`)
 
@@ -119,9 +121,10 @@ and the canonical-repo prerequisite (RG + OIDC principal + subscription-scoped C
 per [docs/rbac.md](docs/rbac.md)). From this phase on, every layer is deployed by pushing to
 `master` — no manual applies at all, including Phase 2._
 
-- [ ] `deploy.yaml` — trigger on push to `master` touching `infra/`/app paths; Azure OIDC + AWS
-      creds; materialize `backend.hcl`/`def.tfvars` from repo variables; `init` → `plan` →
-      `apply`. (Functions deploy and `$web` upload steps are added in Phases 7–8.)
+- [ ] `deploy.yaml` — trigger on push to `master` touching `infra/`/app paths; single Azure OIDC
+      login (provider + `azurerm` backend); materialize `backend.hcl`/`def.tfvars` from repo
+      variables; `init` → `plan` → `apply`. (Functions deploy and `$web` upload steps are added
+      in Phases 7–8.)
 - [ ] `destroy.yaml` — `workflow_dispatch`; same auth/config; `terraform destroy`.
 
 **Verify**

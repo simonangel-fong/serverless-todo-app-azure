@@ -19,12 +19,17 @@ a reference — none of the code below is applied from this repo.
 3. **Federated identity credential** — trusts GitHub's OIDC issuer for this repo/branch, so no
    client secret exists anywhere.
 4. **Control-plane role assignment** — Contributor for the principal, **subscription-scoped**.
+5. **Terraform state storage** — a Storage account + `tfstate` blob container, in the same RG.
+   This repo's `azurerm` backend points at it (see [infra/backend.hcl.example](../infra/backend.hcl.example)).
+   Since state and resources now both live in Azure, the CI principal's Contributor grant (which
+   includes `listKeys` on the storage account) is sufficient for backend auth too — no separate
+   credentials or AWS OIDC role needed.
 
 ## Terraform (canonical repo)
 
 ```hcl
 # serverless-todo-app-azure.tf
-# Providers: azurerm for the RG + role assignment, azuread for the identity.
+# Providers: azurerm for the RG/role assignment/state storage, azuread for the identity.
 
 locals {
   serverless_todoapp_name     = "serverless-todoapp-dev"
@@ -70,6 +75,54 @@ resource "azurerm_role_assignment" "serverless_todoapp" {
 output "serverless_todoapp_client_id" {
   value = azuread_application.serverless_todoapp.client_id
 }
+
+# ##############################
+# Remote state backend storage
+# ##############################
+
+# Storage account names must be globally unique, 3-24 chars, lowercase alphanumeric only.
+# Suffix keeps it collision-free across deploys.
+resource "random_string" "serverless_todoapp_sa" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
+resource "azurerm_storage_account" "serverless_todoapp_tfstate" {
+  name                     = "sttodoapp${random_string.serverless_todoapp_sa.result}"
+  resource_group_name      = azurerm_resource_group.serverless_todoapp.name
+  location                 = azurerm_resource_group.serverless_todoapp.location
+  account_tier             = "Standard"
+  account_replication_type = "LRS"
+
+  min_tls_version                 = "TLS1_2"
+  allow_nested_items_to_be_public = false
+  shared_access_key_enabled       = true
+
+  blob_properties {
+    versioning_enabled = true
+  }
+
+  tags = local.serverless_todoapp_tags
+}
+
+resource "azurerm_storage_container" "serverless_todoapp_tfstate" {
+  name                  = "tfstate"
+  storage_account_id    = azurerm_storage_account.serverless_todoapp_tfstate.id
+  container_access_type = "private"
+}
+
+output "serverless_todoapp_tfstate_resource_group" {
+  value = azurerm_resource_group.serverless_todoapp.name
+}
+
+output "serverless_todoapp_tfstate_storage_account" {
+  value = azurerm_storage_account.serverless_todoapp_tfstate.name
+}
+
+output "serverless_todoapp_tfstate_container" {
+  value = azurerm_storage_container.serverless_todoapp_tfstate.name
+}
 ```
 
 ### Scope: subscription (not resource-group)
@@ -98,9 +151,12 @@ The canonical repo exposes these; they are set as **GitHub Actions repository va
 
 | Canonical output                          | GitHub variable         | Used by                    |
 | ----------------------------------------- | ----------------------- | -------------------------- |
-| `serverless_todoapp_client_id` output     | `AZURE_CLIENT_ID`       | `azure/login` OIDC step    |
-| tenant id                                 | `AZURE_TENANT_ID`       | `azure/login` OIDC step    |
-| subscription id                           | `AZURE_SUBSCRIPTION_ID` | `azure/login`, provider    |
+| `serverless_todoapp_client_id` output     | `AZURE_CLIENT_ID`       | OIDC login + provider + backend |
+| tenant id                                 | `AZURE_TENANT_ID`       | OIDC login + provider + backend |
+| subscription id                           | `AZURE_SUBSCRIPTION_ID` | OIDC login + provider + backend |
+| `serverless_todoapp_tfstate_resource_group` output | `TF_STATE_RESOURCE_GROUP` | `infra/backend.hcl` |
+| `serverless_todoapp_tfstate_storage_account` output | `TF_STATE_STORAGE_ACCOUNT` | `infra/backend.hcl` |
+| `serverless_todoapp_tfstate_container` output | `TF_STATE_CONTAINER` | `infra/backend.hcl` |
 
 ## Verification (before this repo's Phase 3 goes live)
 

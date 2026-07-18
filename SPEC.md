@@ -16,7 +16,7 @@ with Claude Code (see [PLAN.md](PLAN.md) and `.claude/`).
 | Frontend      | Static HTML/JS hosted on a Storage account static website, fronted by Azure CDN |
 | Auth          | Out of scope for now; schema designed so it can be added later                  |
 | IaC           | Terraform (`azurerm` provider)                                                  |
-| State backend | Existing S3 bucket (managed outside this repo)                                  |
+| State backend | Azure Storage account + blob container (created by the canonical repo)         |
 | CI/CD         | GitHub Actions with OIDC                                                        |
 
 ## Data model — Cosmos DB container `todos`
@@ -64,9 +64,12 @@ clock or random GUID generation — production code generates real GUIDs and tim
 ## Constraints & non-goals
 
 - **Serverless / scale-to-zero**: Cosmos serverless + Functions consumption must incur ~no cost when idle.
-- **No secrets in CI**: Azure access via OIDC; S3 backend via AWS OIDC role or repo variables.
-- **Cross-cloud state**: Terraform state lives in AWS S3 while resources live in Azure — backend and
-  provider are independent, but CI must provide both credentials.
+- **No secrets in CI**: both the `azurerm` provider and the `azurerm` state backend authenticate via
+  the same Azure OIDC principal — no AWS, no separate backend credentials.
+- **Single-cloud state**: state and resources both live in Azure. The state storage account is
+  created and owned by the canonical repo (see [docs/rbac.md](docs/rbac.md)); the CI principal's
+  subscription-scoped Contributor grant already covers `listKeys` on it, so no extra RBAC is
+  needed for backend access.
 - **Sensitive config not committed**: `backend.hcl` and `def.tfvars` are gitignored; `*.example`
   templates are committed.
 - **OIDC identity and its permissions are external**: the Entra app registration, federated
