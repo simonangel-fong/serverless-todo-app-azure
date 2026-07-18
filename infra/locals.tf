@@ -31,11 +31,14 @@ locals {
   # region and commonly has separate capacity.
   cosmos_location = "eastus2"
 
-  # Function App resources deployed in East US 2 rather than the RG's `location` (East US) --
-  # this subscription is a Free Trial and its App Service Plan quota (Total VMs) is 0 in East
-  # US, which fails Y1 (Consumption) plan creation with a 401 Unauthorized quota error. East US
-  # 2 is where Cosmos already landed (see cosmos_location above) and has quota available.
-  function_location = "eastus2"
+  # Function App resources deployed in Central US rather than the RG's `location` (East US) or
+  # East US 2 -- this subscription is a Free Trial, whose Microsoft.Web "Total Regional VMs"
+  # quota (backing Linux Consumption/Y1 plans) is 0 in both East US and East US 2, confirmed via
+  # `az functionapp create --consumption-plan-location` test creates: East US/East US 2 both
+  # fail with a 401 quota error, while Central US, West US 2, and North Europe all succeed. Free
+  # Trial subscriptions aren't eligible for quota increases (Microsoft's own guidance), so the
+  # working region is picked directly rather than requesting more quota.
+  function_location = "centralus"
 
   # Phase 5 — compute (Function App). Hyphens are fine in these names (Function App /
   # Service Plan naming rules allow them), so they follow the same "<project>-<env>-<suffix>"
