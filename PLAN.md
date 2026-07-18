@@ -170,11 +170,14 @@ Function App's CORS allow-list in a follow-up change once it exists._
       docs/rbac.md, since the CI principal can't grant role assignments anyway.)_
 
 **Verify**
-- [ ] Push; `deploy.yaml` applies it. Confirm the Function App exists and is reachable
-      (default host ping / `az functionapp show` state `Running`) even with no functions
-      deployed yet.
-- [ ] Confirm the plan is Consumption/Flex (no idle cost); app settings show the Cosmos
-      connection.
+- [x] Push; `deploy.yaml` applies it. Confirmed the Function App exists and is reachable:
+      `az functionapp show` → `state: Running`, `kind: functionapp,linux`, deployed in
+      Central US (East US/East US 2 hit a 0-quota Free Trial restriction on Microsoft.Web
+      "Total VMs" — confirmed via live test creates and moved the layer to Central US).
+- [x] Confirmed the plan is Consumption (no idle cost): `az functionapp plan show` →
+      `sku.tier: Dynamic`, `sku.name: Y1`, `capacity: 0`. App settings show the Cosmos
+      connection: `COSMOS_DB_ENDPOINT`/`COSMOS_DB_DATABASE`/`COSMOS_DB_CONTAINER` present
+      via `az functionapp config appsettings list`.
 
 ## Phase 6 — API application layer (`api/`)
 
