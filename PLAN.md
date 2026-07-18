@@ -1,52 +1,204 @@
 # PLAN — Implementation Steps
 
-Derived from [SPEC.md](SPEC.md). Ordered and checkable. Authored/executed with Claude Code
-(subagents in `.claude/agents/`, skills in `.claude/skills/`).
+Derived from [SPEC.md](SPEC.md). Ordered and checkable. Authored/executed with Claude Code.
 
-## 0. Repo hygiene
+Phases are organized by architectural layer and ordered by dependency. The Claude Code
+authoring assets come first — they author everything after them. CI/CD comes immediately after
+the Terraform foundation, so every subsequent layer is deployed by the pipeline, not by hand:
+push a phase's changes → workflow deploys → verify live.
+
+**Prerequisite (out of scope, canonical repo):** the OIDC principal (Entra app registration +
+federated credential) and its control-plane grant (Contributor scoped to this project's
+well-known resource group name, or the subscription) live in the canonical identity repo, so
+this repo's pipeline can never modify its own permissions. How to author that in Terraform is
+documented in [doc/rbac.md](doc/rbac.md). This repo's `rbac.tf` (Phases 4–6, only if needed)
+is limited to data-plane, resource-to-resource assignments (e.g., Function App managed
+identity → Cosmos data role).
+
+Dependency graph:
+
+```
+0 hygiene
+└─ 1 Claude Code authoring assets      [author every phase below]
+   └─ 2 foundation (providers/RG)
+      └─ 3 CI/CD (deploy/destroy workflows)   [deploys phases 4+ from here on]
+         ├─ 4 data (Cosmos) ──────────┐
+         ├─ 5 hosting (Storage+CDN) ──┤
+         │                            └─ 6 compute (Function App)  [needs 4: conn, 5: CORS origin]
+         │                                  └─ 7 API code          [unit tests have no infra deps]
+         │                                        └─ 8 frontend    [needs 5: $web/CDN, 7: live API]
+```
+
+Phases 4 and 5 are independent of each other and may be done in parallel. Phase 7's code and
+unit tests may be written any time after Phase 1; only their pipeline deploy waits on Phase 6.
+
+The CI/CD workflow grows with the stack: Phase 3 ships it as terraform-only; Phase 7 adds the
+Functions deploy step; Phase 8 adds the `$web` upload + CDN purge step.
+
+## Phase 0 — Repo hygiene
+
+_Depends on: nothing._
+
 - [ ] Add `backend.hcl` to [.gitignore](.gitignore) (`*.tfvars` already ignored).
+- [x] `doc/rbac.md` — document how the canonical repo creates the OIDC entity (app
+      registration, federated credential, control-plane role assignment) via Terraform.
 
-## 1. Terraform scaffolding (`infra/`)
+**Verify**
+- [ ] `git status` shows no local secrets tracked; `backend.hcl`/`def.tfvars` are ignored,
+      `*.example` counterparts are tracked.
+- [ ] The grant described in `doc/rbac.md` exists (`az role assignment list --assignee <client-id>`)
+      before Phase 3 goes live.
+
+## Phase 1 — Claude Code authoring assets (`.claude/`)
+
+_Depends on: Phase 0. These author and operate everything below — they exist before the work,
+not after it. Each is refined as later phases exercise it._
+
+- [ ] `agents/terraform-dev` — acts as a Terraform expert; implements the `.tf` code following
+      best practices (Phases 2, 4–6); granted permission to run `terraform` commands.
+- [ ] `agents/api-dev` — acts as the Python Functions developer; develops the Python API code
+      (Phase 7).
+- [ ] `agents/qa-dev` — acts as a QA specialist; creates test cases and implements tests
+      following best practices (Phase 7 unit tests, verify steps).
+- [ ] `skills/cicd` — instructions for the deploy and destroy pipelines (Phase 3 onward).
+- [ ] `skills/api-test` — instructions to test the API (used by Phases 7–8 verify steps).
+
+**Verify**
+- [ ] Each agent/skill loads and runs in Claude Code (dry-run on a scratch target); its
+      instructions reference SPEC.md and this plan so authored output can't drift.
+
+## Phase 2 — Foundation (`infra/`)
+
+_Depends on: Phase 1 (authored by `terraform-dev`). Produces: working backend/provider
+setup and the resource group — the substrate every later `terraform apply` runs on. This is
+the only phase applied manually; everything after deploys via CI/CD. The RG name must match
+the well-known name the canonical repo's grant is scoped to (see [doc/rbac.md](doc/rbac.md));
+no `rbac.tf` here — the CI principal's permissions are owned by the canonical repo._
+
 - [ ] `providers.tf` — `azurerm` provider + required versions; `s3` backend block.
-- [ ] `variables.tf` — inputs (project name, location, tags, OIDC principal object id, etc.).
-- [ ] `locals.tf` — naming convention + common tags.
-- [ ] `outputs.tf` — api url, static-website/CDN endpoint, cosmos endpoint.
+- [ ] `variables.tf` — inputs (project name, location, tags, etc.).
+- [ ] `locals.tf` — naming convention + common tags (the RG name here is the contract with the
+      canonical repo's grant scope).
+- [ ] `outputs.tf` — stub now; each later phase adds its outputs (cosmos endpoint, CDN endpoint,
+      api url) as the real resources land.
 - [ ] `backend.hcl.example` + `def.tfvars.example` — committed templates (bucket/key/region; var values).
-
-## 2. Terraform resources — layer by layer (`infra/`)
 - [ ] `rg.tf` — resource group.
-- [ ] `storage.tf` — storage account + static website ($web).
-- [ ] `cdn.tf` — CDN profile/endpoint fronting the static website.
-- [ ] `cosmos.tf` — Cosmos DB account (serverless) + database + `todos` container (PK `/id`).
-- [ ] `functions.tf` — Function App (Python), plan, app settings incl. Cosmos connection, CORS.
-- [ ] `rbac.tf` — RBAC role assignments for the pre-existing OIDC principal, scoped to the RG.
 
-## 3. Backend API (`api/`)
-- [ ] `function_app.py` — Python v2 model, HTTP routes for CRUD per the SPEC contract.
-- [ ] Cosmos SDK integration (create/read/update/delete against `todos`).
-- [ ] `requirements.txt`, `host.json`, `local.settings.json.example`.
-- [ ] Unit tests (`api/tests/`) — pytest, mocked Cosmos client, driven by the fixtures in
-      `api/tests/fixtures/` (`todos.json`, `requests.json`). Cover each CRUD route incl. 400/404 cases.
+**Verify**
+- [ ] `terraform init -backend-config=backend.hcl` succeeds against the S3 backend.
+- [ ] `terraform validate` and `terraform plan` are clean; plan shows only the resource group.
+- [ ] `terraform apply`; confirm the RG exists (`az group show`) and its name matches the scope
+      of the canonical repo's grant (`az role assignment list --resource-group ...` shows the
+      CI principal as Contributor).
 
-## 4. Frontend (`web/`)
-- [ ] `index.html` + `app.js` + styles — list/create/toggle/delete against `/api/todos`.
-- [ ] API base URL injected at build/deploy time.
+## Phase 3 — CI/CD (`.github/workflows/`)
 
-## 5. CI/CD (`.github/workflows/`)
-- [ ] `deploy.yaml` — trigger on push to `master` touching `infra/`/app paths; Azure OIDC + AWS creds;
-      materialize `backend.hcl`/`def.tfvars` from repo variables; `init` → `plan` → `apply`;
-      deploy Functions app; upload `web/` to `$web`; purge CDN.
+_Depends on: Phase 2 (the RG the canonical grant is scoped to exists; backend/tfvars templates
+exist to materialize) and the canonical-repo prerequisite (OIDC principal + Contributor grant,
+per [doc/rbac.md](doc/rbac.md)). From this phase on, every layer is deployed by pushing to
+`master` — no more manual applies._
+
+- [ ] `deploy.yaml` — trigger on push to `master` touching `infra/`/app paths; Azure OIDC + AWS
+      creds; materialize `backend.hcl`/`def.tfvars` from repo variables; `init` → `plan` →
+      `apply`. (Functions deploy and `$web` upload steps are added in Phases 7–8.)
 - [ ] `destroy.yaml` — `workflow_dispatch`; same auth/config; `terraform destroy`.
 
-## 6. Claude Code authoring assets (`.claude/`)
-- [ ] `agents/terraform-author` — authors the layer-by-layer `.tf` files.
-- [ ] `agents/api-author` — authors the Python Functions CRUD handlers.
-- [ ] `skills/deploy` — wraps init/plan/apply + app deploy.
-- [ ] `skills/verify-crud` — exercises the API end-to-end.
+**Verify**
+- [ ] Push to `master`; `deploy.yaml` runs green via OIDC only (no long-lived secrets), applies
+      cleanly against the Phase 2 state (no-op plan proves state/backend wiring).
+- [ ] Run `destroy.yaml` and re-run `deploy.yaml`; confirm teardown and clean re-creation of
+      the Phase 2 resources — the pipeline is now the deployment path for all later phases.
 
-## Verification
-1. `terraform plan` in `infra/` is clean and reviewable.
-2. After apply: `curl` each CRUD route (create → list → get → update → delete); confirm codes/payloads.
-3. Load the CDN endpoint; confirm the static site does full CRUD against the API.
-4. Confirm serverless tiers scale to zero cost when idle.
-5. Run `destroy.yaml`; confirm full teardown.
+## Phase 4 — Data layer: Cosmos DB (`infra/cosmos.tf`)
+
+_Depends on: Phase 3 (deployed via pipeline), Phase 2 (RG, naming). Produces: Cosmos endpoint +
+connection consumed by Phase 6 app settings. Independent of Phase 5 — parallelizable._
+
+- [ ] Cosmos DB account (serverless capacity mode, NoSQL API).
+- [ ] Database + `todos` container (partition key `/id`).
+- [ ] Output the account endpoint (connection consumed via resource attributes in Phase 6).
+
+**Verify**
+- [ ] Push; `deploy.yaml` applies it. Confirm via `az cosmosdb show` /
+      `az cosmosdb sql container show` that the account is serverless and the container's
+      partition key is `/id`.
+- [ ] Confirm the account has no provisioned throughput (scale-to-zero when idle).
+
+## Phase 5 — Hosting layer: Storage static site + CDN (`infra/storage.tf`, `cdn.tf`)
+
+_Depends on: Phase 3 (deployed via pipeline), Phase 2 (RG, naming). Produces: the frontend
+origin (CDN endpoint hostname) that Phase 6 needs for CORS, and the `$web` container Phase 8
+deploys into. Independent of Phase 4 — parallelizable. Deliberately before the Function App so
+the CORS origin exists when compute is configured._
+
+- [ ] Storage account + static website (`$web`).
+- [ ] CDN profile/endpoint fronting the static website.
+- [ ] Output the CDN endpoint hostname (frontend origin).
+
+**Verify**
+- [ ] Push; `deploy.yaml` applies it. Upload a placeholder `index.html` to `$web` and confirm
+      it's served from both the storage static-website URL and the CDN endpoint.
+
+## Phase 6 — Compute layer: Function App (`infra/functions.tf`)
+
+_Depends on: Phase 4 (Cosmos connection for app settings) and Phase 5 (CDN origin for CORS);
+deployed via the Phase 3 pipeline._
+
+- [ ] Function App (Python), Consumption/Flex plan.
+- [ ] App settings: Cosmos connection string/endpoint referenced from the Phase 4 resources.
+- [ ] CORS: allow the Phase 5 CDN endpoint origin.
+- [ ] Output the api url (Function App default hostname).
+- [ ] (only if AAD auth replaces connection strings) `rbac.tf` — data-plane,
+      resource-to-resource assignments, e.g. Function App managed identity → Cosmos DB data
+      role. Never assignments for the CI principal itself (canonical repo owns those).
+
+**Verify**
+- [ ] Push; `deploy.yaml` applies it. Confirm the Function App exists and is reachable
+      (default host ping / `az functionapp show` state `Running`) even with no functions
+      deployed yet.
+- [ ] Confirm the plan is Consumption/Flex (no idle cost); app settings show the Cosmos
+      connection; CORS lists the CDN origin.
+
+## Phase 7 — API application layer (`api/`)
+
+_Code + unit tests depend only on Phase 1 (fixtures already in `api/tests/fixtures/`) — can be
+written in parallel with Phases 2–6. Pipeline deploy depends on Phase 6 (app to deploy into)
+and Phase 4 (live Cosmos). Extends `deploy.yaml` with the Functions deploy step._
+
+- [ ] `function_app.py` — Python v2 model, HTTP routes for CRUD per the SPEC contract
+      (authored by `api-dev`).
+- [ ] Cosmos SDK integration (create/read/update/delete against `todos`).
+- [ ] `requirements.txt`, `host.json`, `local.settings.json.example`.
+- [ ] Unit tests (`api/tests/`) — authored by `qa-dev`; pytest, mocked Cosmos client, driven by
+      the fixtures in `api/tests/fixtures/` (`todos.json`, `requests.json`). Cover each CRUD
+      route incl. 400/404 cases.
+- [ ] Extend `deploy.yaml`: run pytest, then deploy `api/` to the Function App.
+
+**Verify**
+- [ ] `pytest` passes locally against the mocked Cosmos client and fixtures (no infra needed).
+- [ ] Push; `deploy.yaml` tests and deploys the app. Run `skills/api-test`: each CRUD route
+      against the live endpoint (create → list → get → update → delete) matches the SPEC
+      contract, including the 400/404 error cases.
+
+## Phase 8 — Frontend application layer (`web/`)
+
+_Depends on: Phase 5 (`$web` + CDN to host it) and Phase 7 (live, verified API to call — the
+API base URL injected at deploy time is the Phase 6 output). Extends `deploy.yaml` with the
+`$web` upload + CDN purge step._
+
+- [ ] `index.html` + `app.js` + styles — list/create/toggle/delete against `/api/todos`.
+- [ ] API base URL injected at build/deploy time from the Phase 6 `api url` output.
+- [ ] Extend `deploy.yaml`: upload `web/` to `$web`, purge the CDN.
+
+**Verify**
+- [ ] Push; `deploy.yaml` deploys the frontend.
+- [ ] Load the CDN endpoint in a browser; confirm full CRUD works end-to-end against the live
+      API (create, toggle, edit, delete all reflected without errors).
+
+## Final acceptance
+
+- [ ] `deploy.yaml` runs green end-to-end on push: terraform → pytest → Functions deploy →
+      `$web` upload → CDN purge, with no manual steps and no long-lived secrets (OIDC only).
+- [ ] Confirm serverless tiers scale to zero cost when idle.
+- [ ] Run `destroy.yaml`; confirm full teardown. Re-run `deploy.yaml`; confirm the entire stack
+      is reproducible from scratch.
