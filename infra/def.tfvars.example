@@ -1,0 +1,6 @@
+# Copy to def.tfvars (gitignored) and adjust as needed, then:
+#   terraform plan -var-file=def.tfvars
+project_name = "todoapp"
+environment  = "prod"
+
+tags = {}

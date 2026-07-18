@@ -72,7 +72,7 @@ clock or random GUID generation — production code generates real GUIDs and tim
 - **OIDC identity and its permissions are external**: the Entra app registration, federated
   credential, **and the CI principal's control-plane role assignment** (Contributor scoped to this
   project's well-known resource-group name, or the subscription) live in a separate canonical repo
-  (out of scope) — the pipeline must never manage its own permissions. [doc/rbac.md](doc/rbac.md)
+  (out of scope) — the pipeline must never manage its own permissions. [docs/rbac.md](docs/rbac.md)
   documents how to author that entity in Terraform. This repo consumes client/tenant/subscription
   ids as inputs; its own `rbac.tf` is limited to data-plane, resource-to-resource assignments
   (e.g., Function App managed identity → Cosmos data role), and only if AAD auth is adopted.

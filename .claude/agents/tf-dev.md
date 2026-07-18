@@ -19,7 +19,7 @@ don't wander into other layers.
 - Names and tags come from `locals.tf` — never hardcode a resource name.
 - No secrets in committed files; connection strings flow between resources via Terraform
   resource attributes. Only edit `*.example` templates, never `backend.hcl`/`def.tfvars`.
-- **Never author RBAC for the CI principal** — it lives in the canonical repo (`doc/rbac.md`).
+- **Never author RBAC for the CI principal** — it lives in the canonical repo (`docs/rbac.md`).
   Only data-plane, resource-to-resource assignments, and only if the task calls for one.
 - Pin `required_version` and provider versions; don't bump them casually.
 

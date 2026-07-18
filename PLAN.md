@@ -11,7 +11,7 @@ push a phase's changes → workflow deploys → verify live.
 federated credential) and its control-plane grant (Contributor scoped to this project's
 well-known resource group name, or the subscription) live in the canonical identity repo, so
 this repo's pipeline can never modify its own permissions. How to author that in Terraform is
-documented in [doc/rbac.md](doc/rbac.md). This repo's `rbac.tf` (Phases 4–6, only if needed)
+documented in [docs/rbac.md](docs/rbac.md). This repo's `rbac.tf` (Phases 4–6, only if needed)
 is limited to data-plane, resource-to-resource assignments (e.g., Function App managed
 identity → Cosmos data role).
 
@@ -40,14 +40,14 @@ Functions deploy step; Phase 8 adds the `$web` upload + CDN purge step.
 _Depends on: nothing._
 
 - [x] Add `backend.hcl` to [.gitignore](.gitignore) (`*.tfvars` already ignored).
-- [x] `doc/rbac.md` — document how the canonical repo creates the OIDC entity (app
+- [x] `docs/rbac.md` — document how the canonical repo creates the OIDC entity (app
       registration, federated credential, control-plane role assignment) via Terraform.
 
 **Verify**
 - [x] `git status` shows no local secrets tracked; `backend.hcl`/`def.tfvars` are ignored
       (`git check-ignore` confirms, at repo root and under `infra/`), and the `*.example`
       names are not caught by the ignore rules so they'll be trackable when Phase 2 adds them.
-- [ ] The grant described in `doc/rbac.md` exists (`az role assignment list --assignee <client-id>`)
+- [ ] The grant described in `docs/rbac.md` exists (`az role assignment list --assignee <client-id>`)
       before Phase 3 goes live. _(Deferred — needs the canonical repo's client id; this is the
       Phase 3 entry gate.)_
 
@@ -74,8 +74,7 @@ Skills (`.claude/skills/`, `<verb>-<component>`):
 - [x] `create-tf-layer` — author a Terraform layer end to end (tf-dev → tf-qa loop); layer + spec
       from input / SPEC / PLAN (drives Phases 2, 4–6).
 - [x] `create-api` — build the Todo API end to end (api-dev → api-qa loop) (Phase 7).
-- [x] `deploy-stack` — deploy via pipeline; includes the one-time Phase 2 manual bootstrap
-      (Phase 3 onward).
+- [x] `deploy-stack` — deploy via pipeline (Phase 3 onward).
 - [x] `destroy-stack` — tear down via the destroy pipeline (`workflow_dispatch`).
 - [x] `test-api` — unit + live CRUD verification of the API (Phases 7–8 verify steps).
 
@@ -87,34 +86,38 @@ Skills (`.claude/skills/`, `<verb>-<component>`):
 ## Phase 2 — Foundation (`infra/`)
 
 _Depends on: Phase 1. Built with `create-tf-layer` (tf-dev → tf-qa). Produces: working
-backend/provider setup and the resource group — the substrate every later `terraform apply` runs
-on. This is the only phase applied manually (via `deploy-stack`'s one-time bootstrap); everything
-after deploys via CI/CD. The RG name must match the well-known name the canonical repo's grant is
-scoped to (see [doc/rbac.md](doc/rbac.md)); no `rbac.tf` here — the CI principal's permissions are
-owned by the canonical repo._
+backend/provider setup and a reference to the resource group — the substrate every later
+`terraform apply` runs on. The resource group itself is **created and owned by the canonical
+identity repo** (along with the CI identity and its subscription-scoped Contributor grant — see
+[docs/rbac.md](docs/rbac.md)); this repo only reads it via a `data "azurerm_resource_group"` block,
+so there's no create-before-grant ordering dependency between the two repos and no manual RG
+bootstrap here. No `rbac.tf` in this repo — the CI principal's permissions are owned by the
+canonical repo._
 
-- [ ] `providers.tf` — `azurerm` provider + required versions; `s3` backend block.
-- [ ] `variables.tf` — inputs (project name, location, tags, etc.).
-- [ ] `locals.tf` — naming convention + common tags (the RG name here is the contract with the
-      canonical repo's grant scope).
-- [ ] `outputs.tf` — stub now; each later phase adds its outputs (cosmos endpoint, CDN endpoint,
+- [x] `providers.tf` — `azurerm` provider + required versions; `s3` backend block.
+- [x] `variables.tf` — inputs (project name, environment, tags).
+- [x] `locals.tf` — naming convention + common tags; `resource_group_name` is the literal
+      well-known name (`serverless-todoapp-dev`) created by the canonical repo — kept in sync
+      with that repo's value, not derived here.
+- [x] `outputs.tf` — stub now; each later phase adds its outputs (cosmos endpoint, CDN endpoint,
       api url) as the real resources land.
-- [ ] `backend.hcl.example` + `def.tfvars.example` — committed templates (bucket/key/region; var values).
-- [ ] `rg.tf` — resource group.
+- [x] `backend.hcl.example` + `def.tfvars.example` — committed templates (bucket/key/region; var values).
+- [x] `rg.tf` — `data "azurerm_resource_group"` reference (not a resource — RG is canonical-repo-owned).
 
 **Verify**
 - [ ] `terraform init -backend-config=backend.hcl` succeeds against the S3 backend.
-- [ ] `terraform validate` and `terraform plan` are clean; plan shows only the resource group.
-- [ ] `terraform apply`; confirm the RG exists (`az group show`) and its name matches the scope
-      of the canonical repo's grant (`az role assignment list --resource-group ...` shows the
-      CI principal as Contributor).
+- [ ] `terraform validate` and `terraform plan` are clean; plan shows no changes (data source
+      only, nothing to create).
+- [ ] Confirm the referenced RG exists (`az group show -n serverless-todoapp-dev`) and the CI
+      principal has Contributor at the subscription scope
+      (`az role assignment list --assignee <client-id> -o table`, per `docs/rbac.md`).
 
 ## Phase 3 — CI/CD (`.github/workflows/`)
 
-_Depends on: Phase 2 (the RG the canonical grant is scoped to exists; backend/tfvars templates
-exist to materialize) and the canonical-repo prerequisite (OIDC principal + Contributor grant,
-per [doc/rbac.md](doc/rbac.md)). From this phase on, every layer is deployed by pushing to
-`master` — no more manual applies._
+_Depends on: Phase 2 (backend/tfvars templates exist to materialize; the RG data source resolves)
+and the canonical-repo prerequisite (RG + OIDC principal + subscription-scoped Contributor grant,
+per [docs/rbac.md](docs/rbac.md)). From this phase on, every layer is deployed by pushing to
+`master` — no manual applies at all, including Phase 2._
 
 - [ ] `deploy.yaml` — trigger on push to `master` touching `infra/`/app paths; Azure OIDC + AWS
       creds; materialize `backend.hcl`/`def.tfvars` from repo variables; `init` → `plan` →

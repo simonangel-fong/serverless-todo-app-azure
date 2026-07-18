@@ -8,7 +8,7 @@ description: >
 # destroy-stack — tear down via the pipeline
 
 `destroy.yaml` runs on **`workflow_dispatch` only** — never automatically. Same auth and
-backend/tfvars materialization as `deploy-stack` (see `doc/rbac.md`), then:
+backend/tfvars materialization as `deploy-stack` (see `docs/rbac.md`), then:
 
 ```sh
 terraform destroy -auto-approve -var-file=def.tfvars

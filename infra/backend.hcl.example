@@ -1,0 +1,5 @@
+# Copy to backend.hcl (gitignored) and fill in real values, then:
+#   terraform init -backend-config=backend.hcl
+bucket = "<existing-s3-bucket-name>"
+key    = "serverless-todo-app-azure/terraform.tfstate"
+region = "<aws-region>"
